@@ -1,0 +1,6 @@
+# https://github.com/sharkdp/dbg-macro
+*/dbg.h
+*/thirdparty/*
+build/*
+contrib/*
+install/*
