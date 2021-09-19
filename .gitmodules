@@ -10,3 +10,9 @@
 [submodule "3rdparties/protozero"]
 	path = 3rdparties/protozero
 	url = https://github.com/mapbox/protozero.git
+[submodule "3rdparties/doctest"]
+	path = 3rdparties/doctest
+	url = https://github.com/onqtam/doctest.git
+[submodule "3rdparties/dbg-macro"]
+	path = 3rdparties/dbg-macro
+	url = https://github.com/sharkdp/dbg-macro.git
