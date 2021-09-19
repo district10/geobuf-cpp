@@ -7,3 +7,6 @@
 [submodule "3rdparties/geometry.hpp"]
 	path = 3rdparties/geometry.hpp
 	url = https://github.com/district10/geometry.hpp.git
+[submodule "3rdparties/protozero"]
+	path = 3rdparties/protozero
+	url = https://github.com/mapbox/protozero.git
