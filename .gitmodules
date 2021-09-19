@@ -19,3 +19,6 @@
 [submodule "cmake"]
 	path = cmake
 	url = https://github.com/cubao/cmake.git
+[submodule "geobuf"]
+	path = geobuf
+	url = https://github.com/mapbox/geobuf.git
