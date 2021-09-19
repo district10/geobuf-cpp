@@ -1,22 +1,23 @@
 #pragma once
 
 #include <mapbox/geojson.hpp>
-
-int answer();
+#include <protozero/pbf_builder.hpp>
+#include <protozero/pbf_reader.hpp>
 
 namespace mapbox
 {
 namespace geobuf
 {
-struct Pbf
-{
-};
 struct Encoder
 {
+    using Pbf = protozero::pbf_writer;
     Pbf encode(const mapbox::geojson::geojson &geojson);
     void analyze(const mapbox::geojson::geojson &geojson);
-    void analyzeMultiLine(const mapbox::geojson::multi_line_string &geojson);
-    void analyzePoints(const mapbox::geojson::multi_point &points);
+    void analyzeGeometry(const mapbox::geojson::geometry &geometry);
+    void analyzeMultiLine(
+        const mapbox::geojson::multi_line_string::container_type &lines);
+    void
+    analyzePoints(const mapbox::geojson::multi_point::container_type &points);
     void analyzePoint(const mapbox::geojson::point &point);
     void saveKey(const std::string &key);
 
@@ -39,11 +40,15 @@ struct Encoder
     // function populateLine(coords, line, closed)
     // function isSpecialKey(key, type)
     static bool isSpecialKey(const std::string &key);
-    std::unordered_map<std::string, int> keys;
+
+    uint32_t dim = 2;
+    uint32_t e = 1;
+    std::unordered_map<std::string, std::uint32_t> keys;
 };
 
 struct Decoder
 {
+    using Pbf = protozero::pbf_reader;
     mapbox::geojson::geojson encode(const Pbf &pbf);
     void readDataField(const Pbf &pbf);
     mapbox::geojson::feature_collection readFeatureCollection(const Pbf &pbf);
