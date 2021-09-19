@@ -1,3 +1,9 @@
 [submodule "3rdparties/variant"]
 	path = 3rdparties/variant
 	url = https://github.com/mapbox/variant.git
+[submodule "3rdparties/geometry-cpp"]
+	path = 3rdparties/geometry-cpp
+	url = https://github.com/district10/geojson-cpp.git
+[submodule "3rdparties/geometry.hpp"]
+	path = 3rdparties/geometry.hpp
+	url = https://github.com/district10/geometry.hpp.git
