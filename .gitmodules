@@ -16,3 +16,6 @@
 [submodule "3rdparties/dbg-macro"]
 	path = 3rdparties/dbg-macro
 	url = https://github.com/sharkdp/dbg-macro.git
+[submodule "cmake"]
+	path = cmake
+	url = https://github.com/cubao/cmake.git
