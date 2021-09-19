@@ -20,8 +20,14 @@ elseif(CMAKE_BUILD_TYPE STREQUAL "Release")
 endif()
 
 include(cmake/GitHooks.cmake)
-include(cmake/GeneralConfig.cmake)
+# include(cmake/GeneralConfig.cmake)
 set(CMAKE_CXX_STANDARD 14)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/lib)
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${PROJECT_BINARY_DIR}/bin)
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++14 -O3")
+set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -Wall -O3")
+
 include(cmake/Utilities.cmake)
 
 include_directories(
@@ -30,9 +36,9 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/3rdparties/geojson-cpp/include/
     ${PROJECT_SOURCE_DIR}/3rdparties/geometry.hpp/include
     ${PROJECT_SOURCE_DIR}/3rdparties/protozero/include
+    ${PROJECT_SOURCE_DIR}/3rdparties/rapidjson
     ${PROJECT_SOURCE_DIR}/3rdparties/variant/include
-    ${PROJECT_SOURCE_DIR}/src
-)
+    ${PROJECT_SOURCE_DIR}/src)
 
 set(MAJOR_VERSION 0)
 set(MINOR_VERSION 0)
@@ -63,16 +69,13 @@ if(BUILD_TESTS)
                     exe
                     ${src})
         add_executable(${exe} ${src})
-        target_link_libraries(
-            ${exe}
-            ${PROJECT_NAME}
-        )
+        target_link_libraries(${exe} ${PROJECT_NAME})
     endforeach(src)
 endif()
 add_custom_target(test_all COMMAND make -C .. test_all)
 
 include(cmake/InstallConfig.cmake)
 
-# print_include_directories() 
+# print_include_directories()
 
 # print_all_variables()
