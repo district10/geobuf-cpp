@@ -3,6 +3,9 @@
 #include <protozero/pbf_builder.hpp>
 #include <protozero/pbf_reader.hpp>
 
+#define DBG_MACRO_NO_WARNING
+#include "dbg.h"
+
 constexpr uint32_t maxPrecision = 1e6;
 constexpr uint32_t dimXY = 2;
 constexpr uint32_t dimXYZ = 2;
@@ -34,19 +37,19 @@ Encoder::Pbf Encoder::encode(const mapbox::geojson::geojson &geojson)
         pbf.add_uint32(2, dim);
     }
     uint32_t precision = std::log10(std::min(e, maxPrecision));
-    if (precision != 6) {
+    if (precision != std::log10(maxPrecision)) {
         pbf.add_uint32(3, precision);
     }
 
     geojson.match(
         [&](const mapbox::geojson::feature_collection &features) {
-            // TODO
+            writeFeatureCollection(features, pbf);
         },
         [&](const mapbox::geojson::feature &feature) {
-            // TODO
+            writeFeature(feature, pbf);
         },
         [&](const mapbox::geojson::geometry &geometry) {
-            // TODO
+            writeFeature(geometry, pbf);
         });
     keys.clear();
     return pbf;
@@ -138,8 +141,69 @@ void Encoder::saveKey(const std::string &key)
 void Encoder::writeFeatureCollection(
     const mapbox::geojson::feature_collection &geojson, Pbf &pbf)
 {
+    for (auto &feature : geojson) {
+        protozero::pbf_writer pbf_sub{pbf, 4};
+        // writeFeature(feature, pbf_sub);
+    }
 }
 
-void Encoder::writeFeature(const mapbox::geojson::feature &geojson, Pbf &pbf) {}
+void Encoder::writeFeature(const mapbox::geojson::feature &feature, Pbf &pbf)
+{
+    if (!feature.geometry.is<mapbox::geojson::empty>()) {
+        protozero::pbf_writer pbf_sub{pbf, 1};
+        writeGeometry(feature.geometry, pbf_sub);
+    }
+    // using identifier = mapbox::util::variant<null_value_t, uint64_t, int64_t,
+    // double, std::string>;
+    if (!feature.id.is<mapbox::geojson::null_value_t>()) {
+        dbg("oops id");
+        // feature.id.match([&](const std::string &id) { pbf.add_string(11, id);
+        // },
+        //                  [&](const uint64_t &id) {
+        //                      // pbf.add_string(11, id);
+        //                  },
+        //                  [&](const int64_t &id) {
+        //                      // pbf.add_string(11, id);
+        //                  },
+        //                  [&](const double &id) {
+        //                      // pbf.add_string(11, id);
+        //                  });
+    }
+    if (!feature.properties.empty()) {
+        writeProps(feature.properties, pbf);
+    }
+}
+
+void Encoder::writeGeometry(const mapbox::geojson::geometry &geojson,
+                            Encoder::Pbf &pbf)
+{
+}
+
+void Encoder::writeProps(const mapbox::feature::property_map &props,
+                         Encoder::Pbf &pbf)
+{
+    std::vector<uint32_t> indexes;
+    int valueIndex = 0;
+    for (auto &pair : props) {
+        protozero::pbf_writer pbf_sub{pbf, 13};
+        writeValue(pair.second, pbf_sub);
+        indexes.push_back(keys.at(pair.first));
+        indexes.push_back(valueIndex++);
+    }
+    pbf.add_packed_uint32(14, indexes.begin(), indexes.end());
+}
+
+void Encoder::writeValue(const mapbox::feature::value &value, Encoder::Pbf &pbf)
+{
+    // null_value_t, bool, uint64_t, int64_t, double, std::string,
+    // mapbox::util::recursive_wrapper<std::vector<value>>,
+    // mapbox::util::recursive_wrapper<std::unordered_map<std::string, value>>>;
+    // value.match([&](const bool &val) { pbf.add_bool(5, val); },
+    //             [&](const uint64_t &val) { pbf.add_uint64(3, val); },
+    //             [&](const int64_t &val) { pbf.add_uint64(4, -val); },
+    //             [&](const double &val) { pbf.add_uint64(2, val); },
+    //             [&](const std::string &val) { pbf.add_string(6, val); });
+    //
+}
 }
 }

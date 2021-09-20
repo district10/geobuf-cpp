@@ -28,8 +28,8 @@ struct Encoder
                            Pbf &pbf);
     void writeFeature(const mapbox::geojson::feature &geojson, Pbf &pbf);
     void writeGeometry(const mapbox::geojson::geometry &geojson, Pbf &pbf);
-    void writeProps(const mapbox::feature::property_map &props, Pbf &pbf,
-                    bool isCustom);
+    // in mapbox geojson, there is no custom properties
+    void writeProps(const mapbox::feature::property_map &props, Pbf &pbf);
     void writeValue(const mapbox::feature::value &value, Pbf &pbf);
     void writePoint(const mapbox::geojson::point &point, Pbf &pbf);
     void writeLine(const mapbox::geojson::line_string &line, Pbf &pbf);
@@ -37,9 +37,6 @@ struct Encoder
                         Pbf &pbf);
     void writeMultiPolygon(const mapbox::geojson::multi_polygon &polygons,
                            Pbf &pbf);
-    // function populateLine(coords, line, closed)
-    // function isSpecialKey(key, type)
-    static bool isSpecialKey(const std::string &key);
 
     uint32_t dim = 2;
     uint32_t e = 1;
