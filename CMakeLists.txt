@@ -1,6 +1,8 @@
 cmake_minimum_required(VERSION 3.5)
 project(geobuf)
 
+# set(CMAKE_BUILD_TYPE Debug)
+
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE TRUE)
 if(NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "")
@@ -57,6 +59,9 @@ file(GLOB_RECURSE SOURCES src/**/*.cpp)
 include(cmake/LibraryConfig.cmake)
 target_link_libraries(${PROJECT_NAME} ${CONAN_LIBS})
 print_all_linked_libraries(${PROJECT_NAME})
+
+add_executable(pbf_decoder 3rdparties/protozero/tools/pbf-decoder.cpp)
+target_link_libraries(pbf_decoder ${PROJECT_NAME})
 
 option(BUILD_TESTS "Build tests." ON)
 if(BUILD_TESTS)

@@ -8,6 +8,7 @@
 #include "rapidjson/filewritestream.h"
 #include "rapidjson/prettywriter.h"
 #include "rapidjson/stringbuffer.h"
+#include <fstream>
 
 #include <protozero/pbf_builder.hpp>
 #include <protozero/pbf_reader.hpp>
@@ -62,6 +63,23 @@ bool dump_json(const std::string &path, const RapidjsonValue &json, bool indent)
     return true;
 }
 
+std::string load_bytes(const std::string &path)
+{
+    std::ifstream t(path.c_str());
+    std::stringstream buffer;
+    buffer << t.rdbuf();
+    return buffer.str();
+}
+bool dump_bytes(const std::string &path, const std::string &bytes)
+{
+    std::ofstream outfile(path, std::ofstream::binary | std::ios::out);
+    if (!outfile) {
+        return false;
+    }
+    outfile.write(bytes.data(), bytes.size());
+    return true;
+}
+
 RapidjsonValue parse(const std::string &json, bool raise_error)
 {
     RapidjsonDocument d;
@@ -92,7 +110,7 @@ std::string dump(const RapidjsonValue &json, bool indent)
     return buffer.GetString();
 }
 
-Encoder::Pbf Encoder::encode(const mapbox::geojson::geojson &geojson)
+std::string Encoder::encode(const mapbox::geojson::geojson &geojson)
 {
     assert(keys.empty());
     analyze(geojson);
@@ -107,7 +125,8 @@ Encoder::Pbf Encoder::encode(const mapbox::geojson::geojson &geojson)
                   return kv1.second < kv2.second;
               });
 
-    Encoder::Pbf pbf;
+    std::string data;
+    Encoder::Pbf pbf{data};
     for (auto &kv : keys_vec) {
         pbf.add_string(1, kv.first->c_str());
     }
@@ -130,7 +149,7 @@ Encoder::Pbf Encoder::encode(const mapbox::geojson::geojson &geojson)
             writeFeature(geometry, pbf);
         });
     keys.clear();
-    return pbf;
+    return data;
 }
 
 void Encoder::analyze(const mapbox::geojson::geojson &geojson)
@@ -219,9 +238,9 @@ void Encoder::saveKey(const std::string &key)
 void Encoder::writeFeatureCollection(
     const mapbox::geojson::feature_collection &geojson, Pbf &pbf)
 {
+    protozero::pbf_writer pbf_sub{pbf, 4};
     for (auto &feature : geojson) {
-        protozero::pbf_writer pbf_sub{pbf, 4};
-        // writeFeature(feature, pbf_sub);
+        writeFeature(feature, pbf_sub);
     }
 }
 

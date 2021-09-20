@@ -19,13 +19,16 @@ RapidjsonValue load_json(const std::string &path);
 bool dump_json(const std::string &path, const RapidjsonValue &json,
                bool indent = false);
 
+std::string load_bytes(const std::string &path);
+bool dump_bytes(const std::string &path, const std::string &bytes);
+
 RapidjsonValue parse(const std::string &json, bool raise_error = false);
 std::string dump(const RapidjsonValue &json, bool indent = false);
 
 struct Encoder
 {
     using Pbf = protozero::pbf_writer;
-    Pbf encode(const mapbox::geojson::geojson &geojson);
+    std::string encode(const mapbox::geojson::geojson &geojson);
     void analyze(const mapbox::geojson::geojson &geojson);
     void analyzeGeometry(const mapbox::geojson::geometry &geometry);
     void analyzeMultiLine(const LinesType &lines);
@@ -56,7 +59,7 @@ struct Encoder
 struct Decoder
 {
     using Pbf = protozero::pbf_reader;
-    mapbox::geojson::geojson encode(const Pbf &pbf);
+    mapbox::geojson::geojson decode(const Pbf &pbf);
     void readDataField(const Pbf &pbf);
     mapbox::geojson::feature_collection readFeatureCollection(const Pbf &pbf);
     mapbox::geojson::feature readFeature(const Pbf &pbf);

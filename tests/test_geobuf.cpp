@@ -20,14 +20,35 @@ std::vector<std::string> FIXTURES = {
 
 void roundtripTest(const std::string &path)
 {
-    auto j = mapbox::geobuf::load_json(path);
-    // dbg(mapbox::geobuf::dump(j, true));
+    auto json = mapbox::geobuf::load_json(path);
+    // dbg(mapbox::geobuf::dump(json, true));
+    auto geojson = mapbox::geojson::convert(json);
+    auto encoder = mapbox::geobuf::Encoder();
+    auto pbf = encoder.encode(geojson);
+    dbg(pbf.size());
+
     // json -> pbf -> json
     // TODO
 }
 
+TEST_CASE("read write json")
+{
+    for (auto &basename : FIXTURES) {
+        auto input =
+            dbg(std::string{FIXTURES_DIR + std::string("/") + basename});
+        auto output =
+            dbg(std::string{PROJECT_BINARY_DIR + std::string("/") + basename});
+        auto json = mapbox::geobuf::load_json(input);
+        CHECK(mapbox::geobuf::dump_json(output, json));
+
+        auto bytes = mapbox::geobuf::load_bytes(output);
+        CHECK(bytes == mapbox::geobuf::dump(json));
+    }
+}
+
 TEST_CASE("load configs")
 {
+    return;
     dbg(FIXTURES_DIR);
     dbg(FIXTURES);
     for (auto &basename : FIXTURES) {
