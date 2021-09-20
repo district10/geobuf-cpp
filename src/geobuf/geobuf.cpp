@@ -153,30 +153,56 @@ void Encoder::writeFeature(const mapbox::geojson::feature &feature, Pbf &pbf)
         protozero::pbf_writer pbf_sub{pbf, 1};
         writeGeometry(feature.geometry, pbf_sub);
     }
-    // using identifier = mapbox::util::variant<null_value_t, uint64_t, int64_t,
-    // double, std::string>;
     if (!feature.id.is<mapbox::geojson::null_value_t>()) {
-        dbg("oops id");
-        // feature.id.match([&](const std::string &id) { pbf.add_string(11, id);
-        // },
-        //                  [&](const uint64_t &id) {
-        //                      // pbf.add_string(11, id);
-        //                  },
-        //                  [&](const int64_t &id) {
-        //                      // pbf.add_string(11, id);
-        //                  },
-        //                  [&](const double &id) {
-        //                      // pbf.add_string(11, id);
-        //                  });
+        feature.id.match([&](int64_t id) { pbf.add_int64(12, id); },
+                         [&](const std::string &id) { pbf.add_string(11, id); },
+                         [&](const auto &) {
+                             dbg("unhandled id type",
+                                 mapbox::geojson::stringify(feature.id));
+                         });
     }
     if (!feature.properties.empty()) {
         writeProps(feature.properties, pbf);
     }
 }
 
-void Encoder::writeGeometry(const mapbox::geojson::geometry &geojson,
+void Encoder::writeGeometry(const mapbox::geojson::geometry &geometry,
                             Encoder::Pbf &pbf)
 {
+    geometry.match(
+        [&](const mapbox::geojson::point &point) {
+            pbf.add_enum(1, 0);
+            writePoint(point, pbf);
+        },
+        [&](const mapbox::geojson::multi_point &points) {
+            pbf.add_enum(1, 1);
+            writeLine(points, pbf);
+        },
+        [&](const mapbox::geojson::line_string &lines) {
+            pbf.add_enum(1, 2);
+            writeLine(lines, pbf);
+        },
+        [&](const mapbox::geojson::multi_line_string &lines) {
+            pbf.add_enum(1, 3);
+            writeMultiLine((LinesType &)lines, pbf);
+        },
+        [&](const mapbox::geojson::polygon &polygon) {
+            pbf.add_enum(1, 4);
+            writeMultiLine((LinesType &)polygon, pbf);
+        },
+        [&](const mapbox::geojson::multi_polygon &polygons) {
+            pbf.add_enum(1, 5);
+            writeMultiPolygon(polygons, pbf);
+        },
+        [&](const mapbox::geojson::geometry_collection &geometries) {
+            pbf.add_enum(1, 6);
+            for (auto &geom : geometries) {
+                protozero::pbf_writer pbf_sub{pbf, 4};
+                writeGeometry(geom, pbf_sub);
+            }
+        },
+        [&](const auto &) { dbg("not handled geometry type"); } //
+        );
 }
 
 void Encoder::writeProps(const mapbox::feature::property_map &props,
@@ -195,14 +221,32 @@ void Encoder::writeProps(const mapbox::feature::property_map &props,
 
 void Encoder::writeValue(const mapbox::feature::value &value, Encoder::Pbf &pbf)
 {
-    // null_value_t, bool, uint64_t, int64_t, double, std::string,
-    // mapbox::util::recursive_wrapper<std::vector<value>>,
-    // mapbox::util::recursive_wrapper<std::unordered_map<std::string, value>>>;
-    // value.match([&](const bool &val) { pbf.add_bool(5, val); },
-    //             [&](const uint64_t &val) { pbf.add_uint64(3, val); },
-    //             [&](const int64_t &val) { pbf.add_uint64(4, -val); },
-    //             [&](const double &val) { pbf.add_uint64(2, val); },
-    //             [&](const std::string &val) { pbf.add_string(6, val); });
+    value.match([&](bool val) { pbf.add_bool(5, val); },
+                [&](uint64_t val) { pbf.add_uint64(3, val); },
+                [&](int64_t val) { pbf.add_uint64(4, -val); },
+                [&](double val) { pbf.add_uint64(2, val); },
+                [&](const std::string &val) { pbf.add_string(1, val); },
+                [&](const auto &val) {
+                    pbf.add_string(6, mapbox::geojson::stringify(value));
+                });
+    //
+}
+
+void Encoder::writePoint(const mapbox::geojson::point &point, Encoder::Pbf &pbf)
+{
+    //
+}
+void Encoder::writeLine(const PointsType &line, Encoder::Pbf &pbf)
+{
+
+    //
+}
+void Encoder::writeMultiLine(const LinesType &lines, Encoder::Pbf &pbf)
+{
+    //
+}
+void Encoder::writeMultiPolygon(const PolygonsType &polygons, Encoder::Pbf &pbf)
+{
     //
 }
 }

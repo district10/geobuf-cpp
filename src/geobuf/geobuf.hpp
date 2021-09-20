@@ -8,16 +8,18 @@ namespace mapbox
 {
 namespace geobuf
 {
+using PointsType = mapbox::geojson::multi_point::container_type;
+using LinesType = mapbox::geojson::multi_line_string::container_type;
+using PolygonsType = mapbox::geojson::multi_polygon::container_type;
+
 struct Encoder
 {
     using Pbf = protozero::pbf_writer;
     Pbf encode(const mapbox::geojson::geojson &geojson);
     void analyze(const mapbox::geojson::geojson &geojson);
     void analyzeGeometry(const mapbox::geojson::geometry &geometry);
-    void analyzeMultiLine(
-        const mapbox::geojson::multi_line_string::container_type &lines);
-    void
-    analyzePoints(const mapbox::geojson::multi_point::container_type &points);
+    void analyzeMultiLine(const LinesType &lines);
+    void analyzePoints(const PointsType &points);
     void analyzePoint(const mapbox::geojson::point &point);
     void saveKey(const std::string &key);
 
@@ -32,11 +34,9 @@ struct Encoder
     void writeProps(const mapbox::feature::property_map &props, Pbf &pbf);
     void writeValue(const mapbox::feature::value &value, Pbf &pbf);
     void writePoint(const mapbox::geojson::point &point, Pbf &pbf);
-    void writeLine(const mapbox::geojson::line_string &line, Pbf &pbf);
-    void writeMultiLine(const mapbox::geojson::multi_line_string &lines,
-                        Pbf &pbf);
-    void writeMultiPolygon(const mapbox::geojson::multi_polygon &polygons,
-                           Pbf &pbf);
+    void writeLine(const PointsType &line, Pbf &pbf);
+    void writeMultiLine(const LinesType &lines, Pbf &pbf);
+    void writeMultiPolygon(const PolygonsType &polygons, Pbf &pbf);
 
     uint32_t dim = 2;
     uint32_t e = 1;
