@@ -239,23 +239,24 @@ void Encoder::saveKey(const std::string &key)
 void Encoder::writeFeatureCollection(
     const mapbox::geojson::feature_collection &geojson, Pbf &pbf)
 {
-    protozero::pbf_writer pbf_sub{pbf, 4};
+    protozero::pbf_writer pbf_fc{pbf, 4};
     for (auto &feature : geojson) {
-        writeFeature(feature, pbf_sub);
+        protozero::pbf_writer pbf_f{pbf_fc, 1};
+        writeFeature(feature, pbf_f);
     }
 }
 
 void Encoder::writeFeature(const mapbox::geojson::feature &feature, Pbf &pbf)
 {
     if (!feature.geometry.is<mapbox::geojson::empty>()) {
-        protozero::pbf_writer pbf_sub{pbf, 1};
-        writeGeometry(feature.geometry, pbf_sub);
+        protozero::pbf_writer pbf_geom{pbf, 1};
+        writeGeometry(feature.geometry, pbf_geom);
     }
     if (!feature.id.is<mapbox::geojson::null_value_t>()) {
         feature.id.match([&](int64_t id) { pbf.add_int64(12, id); },
                          [&](const std::string &id) { pbf.add_string(11, id); },
                          [&](const auto &) {
-                             //  dbg("unhandled id type",
+                             dbg("unhandled id type");
                              //      mapbox::geojson::stringify(feature.id));
                          });
     }
@@ -309,8 +310,8 @@ void Encoder::writeProps(const mapbox::feature::property_map &props,
     std::vector<uint32_t> indexes;
     int valueIndex = 0;
     for (auto &pair : props) {
-        protozero::pbf_writer pbf_sub{pbf, 13};
-        writeValue(pair.second, pbf_sub);
+        protozero::pbf_writer pbf_value{pbf, 13};
+        writeValue(pair.second, pbf_value);
         indexes.push_back(keys.at(pair.first));
         indexes.push_back(valueIndex++);
     }
@@ -338,13 +339,13 @@ void Encoder::writePoint(const mapbox::geojson::point &point, Encoder::Pbf &pbf)
     for (int i = 0; i < dim; ++i) {
         coords.push_back(std::round(ptr[i]) * e);
     }
-    pbf.add_packed_sfixed64(3, coords.begin(), coords.end());
+    pbf.add_packed_sint64(3, coords.begin(), coords.end());
 }
 
 void Encoder::writeLine(const PointsType &line, Encoder::Pbf &pbf)
 {
     auto coords = populateLine(line, false);
-    pbf.add_packed_sfixed64(3, coords.begin(), coords.end());
+    pbf.add_packed_sint64(3, coords.begin(), coords.end());
 }
 void Encoder::writeMultiLine(const LinesType &lines, Encoder::Pbf &pbf,
                              bool closed)
@@ -362,7 +363,7 @@ void Encoder::writeMultiLine(const LinesType &lines, Encoder::Pbf &pbf,
     for (auto &line : lines) {
         populateLine(coords, line, closed);
     }
-    pbf.add_packed_sfixed64(3, coords.begin(), coords.end());
+    pbf.add_packed_sint64(3, coords.begin(), coords.end());
 }
 void Encoder::writeMultiPolygon(const PolygonsType &polygons, Encoder::Pbf &pbf)
 {
@@ -404,7 +405,7 @@ void Encoder::populateLine(std::vector<int64_t> &coords, //
     for (int i = 0; i < len; ++i) {
         const double *ptr = &line[i].x;
         for (int j = 0; j < dim; ++j) {
-            int64_t n = ptr[j] * e - sum[j];
+            auto n = static_cast<int64_t>(ptr[j] * e) - sum[j];
             coords.push_back(n);
             sum[j] += n;
         }

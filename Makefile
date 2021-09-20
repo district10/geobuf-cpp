@@ -2,6 +2,7 @@ PROJECT_SOURCE_DIR ?= $(abspath ./)
 BUILD_DIR ?= $(PROJECT_SOURCE_DIR)/build
 INSTALL_DIR ?= $(BUILD_DIR)/install
 NUM_JOB ?= 8
+JQ ?= jq
 
 all:
 	@echo nothing special
@@ -30,3 +31,24 @@ build:
 
 test_all:
 	@cd build && for t in $(wildcard $(BUILD_DIR)/bin/test_*); do echo $$t && eval $$t >/dev/null 2>&1 && echo 'ok' || echo $(RED)Not Ok$(NC); done
+
+
+INPUT_GEOJSON_PATH ?= geobuf/test/fixtures/issue55.json
+GEOJSON_BASENAME = $(shell basename $(abspath $(INPUT_GEOJSON_PATH)))
+
+OUTPUT_DIR_JS ?= $(BUILD_DIR)/js
+OUTPUT_PBF_JS = $(OUTPUT_DIR_JS)/$(GEOJSON_BASENAME).pbf
+OUTPUT_JSN_JS = $(OUTPUT_PBF_JS).json
+
+OUTPUT_DIR_CXX ?= $(BUILD_DIR)/cxx
+OUTPUT_PBF_CXX = $(OUTPUT_DIR_CXX)/$(GEOJSON_BASENAME).pbf
+OUTPUT_JSN_CXX = $(OUTPUT_PBF_CXX).json
+
+roundtrip_test_js:
+	@umask 0000 && mkdir -p $(OUTPUT_DIR_JS)
+	json2geobuf $(INPUT_GEOJSON_PATH) > $(OUTPUT_PBF_JS)
+	geobuf2json $(OUTPUT_PBF_JS) | $(JQ) . > $(OUTPUT_JSN_JS)
+roundtrip_test_cpp:
+	@umask 0000 && mkdir -p $(OUTPUT_DIR_CXX)
+	$(BUILD_DIR)/bin/json2geobuf $(INPUT_GEOJSON_PATH) > $(OUTPUT_PBF_CXX)
+	$(BUILD_DIR)/bin/geobuf2json $(OUTPUT_PBF_CXX) | $(JQ) . > $(OUTPUT_JSN_CXX)

@@ -63,6 +63,21 @@ print_all_linked_libraries(${PROJECT_NAME})
 add_executable(pbf_decoder 3rdparties/protozero/tools/pbf-decoder.cpp)
 target_link_libraries(pbf_decoder ${PROJECT_NAME})
 
+option(BUILD_EXAMPLES "Build examples." ON)
+if(BUILD_EXAMPLES)
+    file(GLOB SRCS examples/*.cpp)
+    foreach(src ${SRCS})
+        string(
+            REGEX
+            REPLACE "(^.*/|.cpp$)"
+                    ""
+                    exe
+                    ${src})
+        add_executable(${exe} ${src})
+        target_link_libraries(${exe} ${PROJECT_NAME})
+    endforeach(src)
+endif()
+
 option(BUILD_TESTS "Build tests." ON)
 if(BUILD_TESTS)
     file(GLOB SRCS tests/test_*.cpp)
