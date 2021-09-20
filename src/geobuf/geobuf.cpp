@@ -16,6 +16,10 @@
 
 #define DBG_MACRO_NO_WARNING
 #include "dbg.h"
+#if _DEBUG
+#undef dbg
+#define dbg(x) x
+#endif
 
 constexpr const auto RJFLAGS = rapidjson::kParseDefaultFlags |
                                rapidjson::kParseCommentsFlag |
@@ -26,6 +30,7 @@ constexpr uint32_t dimXY = 2;
 constexpr uint32_t dimXYZ = 2;
 
 using RapidjsonDocument = mapbox::geojson::rapidjson_document;
+using RapidjsonAllocator = mapbox::geojson::rapidjson_allocator;
 
 namespace mapbox
 {
@@ -81,6 +86,18 @@ bool dump_bytes(const std::string &path, const std::string &bytes)
     return true;
 }
 
+RapidjsonValue geojson2json(const mapbox::geojson::value &geojson)
+{
+    RapidjsonAllocator allocator;
+    return mapbox::geojson::value::visit(geojson,
+                                         mapbox::geojson::to_value{allocator});
+}
+
+mapbox::geojson::value json2geojson(const RapidjsonValue &json)
+{
+    return mapbox::geojson::convert<mapbox::geojson::value>(json);
+}
+
 RapidjsonValue parse(const std::string &json, bool raise_error)
 {
     RapidjsonDocument d;
@@ -109,6 +126,11 @@ std::string dump(const RapidjsonValue &json, bool indent)
         json.Accept(writer);
     }
     return buffer.GetString();
+}
+
+std::string dump(const mapbox::geojson::value &geojson, bool indent)
+{
+    return dump(geojson2json(geojson), indent);
 }
 
 std::string Encoder::encode(const mapbox::geojson::geojson &geojson)
@@ -417,5 +439,279 @@ std::string Decoder::to_printable(const std::string &pbf_bytes)
     // TODO
     return ::decode(pbf_bytes.data(), pbf_bytes.size(), "");
 }
+
+mapbox::geojson::geojson Decoder::decode(const std::string &pbf_bytes)
+{
+    dbg(__PRETTY_FUNCTION__);
+    auto pbf = protozero::pbf_reader{pbf_bytes};
+    e = maxPrecision;
+    while (pbf.next()) {
+        const auto tag = pbf.tag();
+        dbg(tag);
+        if (tag == 1) {
+            keys.push_back(pbf.get_string());
+        } else if (tag == 2) {
+            dim = pbf.get_uint32();
+        } else if (tag == 3) {
+            e = std::pow(10, pbf.get_uint32());
+        } else if (tag == 4) {
+            protozero::pbf_reader pbf_fc = pbf.get_message();
+            return readFeatureCollection(pbf_fc);
+        } else if (tag == 5) {
+            protozero::pbf_reader pbf_f = pbf.get_message();
+            return readFeature(pbf_f);
+        } else if (tag == 6) {
+            protozero::pbf_reader pbf_g = pbf.get_message();
+            return readGeometry(pbf_g);
+        } else {
+            dbg("unhandled tag");
+            pbf.skip();
+        }
+    }
+}
+
+mapbox::geojson::feature_collection Decoder::readFeatureCollection(Pbf &pbf)
+{
+    dbg(__PRETTY_FUNCTION__);
+    mapbox::geojson::feature_collection fc;
+    while (pbf.next()) {
+        const auto tag = pbf.tag();
+        dbg(tag);
+        if (tag == 1) {
+            protozero::pbf_reader pbf_f = pbf.get_message();
+            fc.push_back(readFeature(pbf_f));
+        } else if (tag == 13 || tag == 15) {
+            pbf.skip();
+            dbg("TODO custom properties");
+        } else {
+            pbf.skip();
+            dbg("unhandled pbf type");
+        }
+    }
+    return fc;
+}
+mapbox::geojson::feature Decoder::readFeature(Pbf &pbf)
+{
+    dbg(__PRETTY_FUNCTION__);
+    mapbox::geojson::feature f;
+    std::vector<mapbox::geojson::value> values;
+    while (pbf.next()) {
+        const auto tag = pbf.tag();
+        dbg(tag);
+        if (tag == 1) {
+            protozero::pbf_reader pbf_g = pbf.get_message();
+            f.geometry = readGeometry(pbf_g);
+        } else if (tag == 11) {
+            f.id = pbf.get_string();
+        } else if (tag == 12) {
+            f.id = pbf.get_int64();
+        } else if (tag == 13) {
+            protozero::pbf_reader pbf_v = pbf.get_message();
+            values.push_back(readValue(pbf_v));
+        } else if (tag == 14) {
+            auto indexes = pbf.get_packed_uint32();
+            if (indexes.size() % 2 != 0) {
+                dbg("something went wrong");
+                continue;
+            }
+            for (auto it = indexes.begin(); it != indexes.end();) {
+                auto &key = keys[*it++];
+                auto &value = values[*it++];
+                f.properties.emplace(key, value);
+            }
+        } else {
+            pbf.skip();
+        }
+    }
+    dbg(mapbox::geobuf::dump(values));
+    return f;
+}
+
+std::vector<mapbox::geojson::point>
+populate_points(const std::vector<int64_t> &int64s, //
+                int start_index, int length,        //
+                int dim, double inv_e, bool closed = false)
+{
+    auto coords = std::vector<mapbox::geojson::point>{};
+    coords.resize(length + (closed ? 1 : 0));
+    auto prevP = std::array<int64_t, 3>{0, 0, 0};
+    for (int i = 0; i < length; ++i) {
+        double *p = &coords[i].x;
+        for (int d = 0; d < dim; ++d) {
+            prevP[d] += int64s[(start_index + i) * dim + d];
+            p[d] = prevP[d] * inv_e;
+        }
+    }
+    if (closed) {
+        coords.back() = coords.front();
+    }
+    return coords;
+}
+
+mapbox::geojson::geometry Decoder::readGeometry(Pbf &pbf)
+{
+    if (!pbf.next()) {
+        return {};
+    }
+    double inv_e = 1.0 / e;
+    const auto type = pbf.get_enum();
+    auto populatePoint = [&](mapbox::geojson::geometry &point,
+                             const std::vector<int64_t> &coords) {
+        if (dim == 3) {
+            point = mapbox::geojson::point(coords[0] * inv_e, coords[1] * inv_e,
+                                           coords[2] * inv_e);
+        } else {
+            point =
+                mapbox::geojson::point(coords[0] * inv_e, coords[1] * inv_e);
+        }
+    };
+
+    auto populateMultiPoint = [&](mapbox::geojson::geometry &points,
+                                  const std::vector<int64_t> &coords) {
+        points = mapbox::geojson::multi_point{
+            populate_points(coords,                 //
+                            0, coords.size() / dim, //
+                            dim, inv_e)};
+    };
+
+    auto populateLineString = [&](mapbox::geojson::geometry &line,
+                                  const std::vector<int64_t> &coords) {
+        line = mapbox::geojson::line_string{
+            populate_points(coords,                 //
+                            0, coords.size() / dim, //
+                            dim, inv_e)};
+    };
+
+    auto populateMultiLineString = [&](mapbox::geojson::geometry &lines,
+                                       const std::vector<uint32_t> &lengths,
+                                       const std::vector<int64_t> &coords) {
+        if (lengths.empty()) {
+            lines = mapbox::geojson::multi_line_string{
+                {populate_points(coords, 0, coords.size() / dim, dim, inv_e)}};
+        } else {
+            int lastIndex = 0;
+            auto ret = mapbox::geojson::multi_line_string{};
+            ret.reserve(lengths.size());
+            for (auto length : lengths) {
+                ret.push_back(mapbox::geojson::line_string{
+                    populate_points(coords, lastIndex, length, dim, inv_e)});
+                lastIndex += length;
+            }
+            lines = std::move(ret);
+        }
+    };
+
+    auto populatePolygon = [&](mapbox::geojson::geometry &polygon,
+                               const std::vector<uint32_t> &lengths,
+                               const std::vector<int64_t> &coords) {
+        if (lengths.empty()) {
+            auto shell = mapbox::geojson::line_string{populate_points(
+                coords, 0, coords.size() / dim, dim, inv_e, true)};
+            polygon = mapbox::geojson::polygon{{std::move(shell)}};
+        } else {
+            int lastIndex = 0;
+            auto ret = mapbox::geojson::polygon{};
+            ret.reserve(lengths.size());
+            for (auto length : lengths) {
+                ret.push_back(mapbox::geojson::line_string{populate_points(
+                    coords, lastIndex, length, dim, inv_e, true)});
+                lastIndex += length;
+            }
+            polygon = std::move(ret);
+        }
+    };
+
+    auto populateMultiPolygon = [&](mapbox::geojson::geometry &polygons,
+                                    const std::vector<uint32_t> &lengths,
+                                    const std::vector<int64_t> &coords) {
+        if (lengths.empty()) {
+            auto shell = mapbox::geojson::line_string{populate_points(
+                coords, 0, coords.size() / dim, dim, inv_e, true)};
+            polygons = mapbox::geojson::multi_polygon{{{std::move(shell)}}};
+        } else {
+        }
+    };
+
+    std::vector<uint32_t> lengths;
+    mapbox::geojson::geometry g;
+    while (pbf.next()) {
+        const auto tag = pbf.tag();
+        if (tag == 2) {
+            auto uint32s = pbf.get_packed_uint32();
+            lengths = std::vector<uint32_t>(uint32s.begin(), uint32s.end());
+        } else if (tag == 3) {
+            auto int64s = pbf.get_packed_sint64();
+            auto coords = std::vector<int64_t>(int64s.begin(), int64s.end());
+            if (type == 0) {
+                populatePoint(g, coords);
+            } else if (type == 1) {
+                populateMultiPoint(g, coords);
+            } else if (type == 2) {
+                populateLineString(g, coords);
+            } else if (type == 3) {
+                populateMultiLineString(g, lengths, coords);
+            } else if (type == 4) {
+                populatePolygon(g, lengths, coords);
+            } else if (type == 5) {
+                populateMultiPolygon(g, lengths, coords);
+            } else if (type == 6) {
+                //
+            } else {
+                dbg("something went wrong");
+                return g;
+            }
+        } else if (tag == 4) {
+            if (!g.is<mapbox::geojson::geometry_collection>()) {
+                g = mapbox::geojson::geometry_collection{};
+            }
+            g.get<mapbox::geojson::geometry_collection>().push_back(
+                readGeometry(pbf));
+        } else if (tag == 13 || tag == 15) {
+            dbg("TODO custom properties");
+        }
+    }
+    return g;
+}
+void Decoder::readFeatureColectionField(Pbf &pbf) {}
+void Decoder::readFeatureField(Pbf &pbf) {}
+void Decoder::readGeometryField(Pbf &pbf) {}
+void Decoder::readCoords(Pbf &pbf) {}
+mapbox::geojson::value Decoder::readValue(Pbf &pbf)
+{
+    if (!pbf.next()) {
+        return {};
+    }
+    const auto tag = pbf.tag();
+    if (tag == 1) {
+        return pbf.get_string();
+    } else if (tag == 2) {
+        return pbf.get_double();
+    } else if (tag == 3) {
+        return pbf.get_uint64();
+    } else if (tag == 4) {
+        return static_cast<int64_t>(-pbf.get_uint64());
+    } else if (tag == 5) {
+        return pbf.get_bool();
+    } else if (tag == 6) {
+        auto text = pbf.get_string();
+        return text;
+        // TODO
+        // mapbox::geobuf::parse(text);
+    } else {
+        pbf.skip();
+    }
+    return {};
+}
+mapbox::feature::property_map Decoder::readProps(Pbf &pbf)
+{
+    mapbox::feature::property_map props;
+    //
+    return props;
+}
+void Decoder::readPoint(Pbf &pbf) {}
+void Decoder::readLinePart(Pbf &pbf) {}
+void Decoder::readLine(Pbf &pbf) {}
+void Decoder::readMultiLine(Pbf &pbf) {}
+void Decoder::readMultiPolygon(Pbf &pbf) {}
 }
 }

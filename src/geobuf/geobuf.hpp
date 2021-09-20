@@ -22,13 +22,19 @@ bool dump_json(const std::string &path, const RapidjsonValue &json,
 std::string load_bytes(const std::string &path);
 bool dump_bytes(const std::string &path, const std::string &bytes);
 
+RapidjsonValue geojson2json(const mapbox::geojson::value &geojson);
+mapbox::geojson::value json2geojson(const RapidjsonValue &json);
+
 RapidjsonValue parse(const std::string &json, bool raise_error = false);
 std::string dump(const RapidjsonValue &json, bool indent = false);
+std::string dump(const mapbox::geojson::value &geojson, bool indent = false);
 
 struct Encoder
 {
     using Pbf = protozero::pbf_writer;
     std::string encode(const mapbox::geojson::geojson &geojson);
+
+  private:
     void analyze(const mapbox::geojson::geojson &geojson);
     void analyzeGeometry(const mapbox::geojson::geometry &geometry);
     void analyzeMultiLine(const LinesType &lines);
@@ -65,23 +71,27 @@ struct Decoder
 {
     using Pbf = protozero::pbf_reader;
     static std::string to_printable(const std::string &pbf_bytes);
+    mapbox::geojson::geojson decode(const std::string &pbf_bytes);
 
-    mapbox::geojson::geojson decode(const Pbf &pbf);
-    void readDataField(const Pbf &pbf);
-    mapbox::geojson::feature_collection readFeatureCollection(const Pbf &pbf);
-    mapbox::geojson::feature readFeature(const Pbf &pbf);
-    void readGeometry(const Pbf &pbf);
-    void readFeatureColectionField(const Pbf &pbf);
-    void readFeatureField(const Pbf &pbf);
-    void readGeometryField(const Pbf &pbf);
-    void readCoords(const Pbf &pbf);
-    void readValue(const Pbf &pbf);
-    void readProps(const Pbf &pbf);
-    void readPoint(const Pbf &pbf);
-    void readLinePart(const Pbf &pbf);
-    void readLine(const Pbf &pbf);
-    void readMultiLine(const Pbf &pbf);
-    void readMultiPolygon(const Pbf &pbf);
+  private:
+    mapbox::geojson::feature_collection readFeatureCollection(Pbf &pbf);
+    mapbox::geojson::feature readFeature(Pbf &pbf);
+    mapbox::geojson::geometry readGeometry(Pbf &pbf);
+    void readFeatureColectionField(Pbf &pbf);
+    void readFeatureField(Pbf &pbf);
+    void readGeometryField(Pbf &pbf);
+    void readCoords(Pbf &pbf);
+    mapbox::geojson::value readValue(Pbf &pbf);
+    mapbox::feature::property_map readProps(Pbf &pbf);
+    void readPoint(Pbf &pbf);
+    void readLinePart(Pbf &pbf);
+    void readLine(Pbf &pbf);
+    void readMultiLine(Pbf &pbf);
+    void readMultiPolygon(Pbf &pbf);
+
+    uint32_t dim = 2;
+    uint32_t e = 1;
+    std::vector<std::string> keys;
 };
 
 } // namespace goebuf

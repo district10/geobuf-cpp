@@ -1,0 +1,113 @@
+{
+    "type": "FeatureCollection",
+    "features": [
+        {
+            "type": "Feature",
+            "properties": {
+                "miles hiked  ": 12
+            },
+            "geometry": {
+                "type": "LineString",
+                "coordinates": [
+                    [
+                        -1.1,
+                        2.1
+                    ],
+                    [
+                        2,
+                        -999.9
+                    ]
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "  profit": -999.9
+            },
+            "geometry": null
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "miles hiked  ": 13.1
+            },
+            "geometry": {
+                "type": "Point",
+                "coordinates": [
+                    0.0001,
+                    -0.0001
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {
+                "  profit": -999.9
+            },
+            "geometry": {
+                "type": "MultiLineString",
+                "coordinates": [
+                    [
+                        [
+                            -1.1,
+                            2.1
+                        ],
+                        [
+                            2,
+                            -999.9
+                        ]
+                    ],
+                    [
+                        [
+                            10,
+                            20,
+                            30
+                        ],
+                        [
+                            20,
+                            30,
+                            40
+                        ],
+                        [
+                            30,
+                            40,
+                            50
+                        ]
+                    ]
+                ]
+            }
+        },
+        {
+            "type": "Feature",
+            "properties": {},
+            "geometry": {
+                "type": "Polygon",
+                "coordinates": [
+                    [
+                        [
+                            105.1171875,
+                            50.736455137010665
+                        ],
+                        [
+                            103.35937499999999,
+                            42.293564192170095
+                        ],
+                        [
+                            120.9375,
+                            39.90973623453719
+                        ],
+                        [
+                            116.01562499999999,
+                            53.9560855309879
+                        ],
+                        [
+                            105.1171875,
+                            50.736455137010665
+                        ]
+                    ]
+                ]
+            }
+        }
+    ]
+}

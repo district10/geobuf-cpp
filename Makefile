@@ -48,6 +48,7 @@ roundtrip_test_js:
 	@umask 0000 && mkdir -p $(OUTPUT_DIR_JS)
 	json2geobuf $(INPUT_GEOJSON_PATH) > $(OUTPUT_PBF_JS)
 	geobuf2json $(OUTPUT_PBF_JS) | $(JQ) . > $(OUTPUT_JSN_JS)
+	cat $(INPUT_GEOJSON_PATH) | $(JQ) . > $(OUTPUT_DIR_JS)/$(GEOJSON_BASENAME)
 roundtrip_test_cpp:
 	@umask 0000 && mkdir -p $(OUTPUT_DIR_CXX)
 	$(BUILD_DIR)/bin/json2geobuf $(INPUT_GEOJSON_PATH) > $(OUTPUT_PBF_CXX)
