@@ -442,12 +442,10 @@ std::string Decoder::to_printable(const std::string &pbf_bytes)
 
 mapbox::geojson::geojson Decoder::decode(const std::string &pbf_bytes)
 {
-    dbg(__PRETTY_FUNCTION__);
     auto pbf = protozero::pbf_reader{pbf_bytes};
     e = maxPrecision;
     while (pbf.next()) {
         const auto tag = pbf.tag();
-        dbg(tag);
         if (tag == 1) {
             keys.push_back(pbf.get_string());
         } else if (tag == 2) {
@@ -472,11 +470,9 @@ mapbox::geojson::geojson Decoder::decode(const std::string &pbf_bytes)
 
 mapbox::geojson::feature_collection Decoder::readFeatureCollection(Pbf &pbf)
 {
-    dbg(__PRETTY_FUNCTION__);
     mapbox::geojson::feature_collection fc;
     while (pbf.next()) {
         const auto tag = pbf.tag();
-        dbg(tag);
         if (tag == 1) {
             protozero::pbf_reader pbf_f = pbf.get_message();
             fc.push_back(readFeature(pbf_f));
@@ -492,12 +488,10 @@ mapbox::geojson::feature_collection Decoder::readFeatureCollection(Pbf &pbf)
 }
 mapbox::geojson::feature Decoder::readFeature(Pbf &pbf)
 {
-    dbg(__PRETTY_FUNCTION__);
     mapbox::geojson::feature f;
     std::vector<mapbox::geojson::value> values;
     while (pbf.next()) {
         const auto tag = pbf.tag();
-        dbg(tag);
         if (tag == 1) {
             protozero::pbf_reader pbf_g = pbf.get_message();
             f.geometry = readGeometry(pbf_g);
@@ -523,7 +517,6 @@ mapbox::geojson::feature Decoder::readFeature(Pbf &pbf)
             pbf.skip();
         }
     }
-    dbg(mapbox::geobuf::dump(values));
     return f;
 }
 
