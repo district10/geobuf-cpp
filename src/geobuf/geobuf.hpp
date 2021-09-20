@@ -59,6 +59,8 @@ struct Encoder
 struct Decoder
 {
     using Pbf = protozero::pbf_reader;
+    static std::string to_printable(const std::string &pbf_bytes);
+
     mapbox::geojson::geojson decode(const Pbf &pbf);
     void readDataField(const Pbf &pbf);
     mapbox::geojson::feature_collection readFeatureCollection(const Pbf &pbf);

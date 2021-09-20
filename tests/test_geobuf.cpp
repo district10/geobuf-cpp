@@ -10,25 +10,34 @@
 
 std::string FIXTURES_DIR = PROJECT_SOURCE_DIR "/geobuf/test/fixtures";
 std::vector<std::string> FIXTURES = {
-    "issue55.json",          //
-    "issue62.json",          //
-    "issue90.json",          //
-    "precision.json",        //
-    "props.json",            //
-    "single-multipoly.json", //
+    "issue55.json", //
+    // "issue62.json",          //
+    // "issue90.json",          //
+    // "precision.json",        //
+    // "props.json",            //
+    // "single-multipoly.json", //
 };
 
-void roundtripTest(const std::string &path)
+void roundtripTest(const std::string &fixture_basename)
 {
-    auto json = mapbox::geobuf::load_json(path);
-    // dbg(mapbox::geobuf::dump(json, true));
-    auto geojson = mapbox::geojson::convert(json);
+    auto input =
+        dbg(std::string{FIXTURES_DIR + std::string("/") + fixture_basename});
+    auto output = dbg(std::string{PROJECT_BINARY_DIR + std::string("/") +
+                                  fixture_basename + ".pbf"});
+
+    // js version
+    // npm install -g geobuf
+    // json2geobuf input.json > output.pbf
+
+    auto geojson = mapbox::geojson::convert(mapbox::geobuf::load_json(input));
     auto encoder = mapbox::geobuf::Encoder();
     auto pbf = encoder.encode(geojson);
     dbg(pbf.size());
+    mapbox::geobuf::dump_bytes(output, pbf);
+    dbg(mapbox::geobuf::Decoder::to_printable(pbf));
+    dbg("done");
 
-    // json -> pbf -> json
-    // TODO
+    // build/bin/pbf_decoder build/issue55.json.pbf
 }
 
 TEST_CASE("read write json")
@@ -48,12 +57,9 @@ TEST_CASE("read write json")
 
 TEST_CASE("load configs")
 {
-    return;
     dbg(FIXTURES_DIR);
     dbg(FIXTURES);
-    for (auto &basename : FIXTURES) {
-        auto path =
-            dbg(std::string{FIXTURES_DIR + std::string("/") + basename});
+    for (auto &path : FIXTURES) {
         roundtripTest(path);
     }
 }

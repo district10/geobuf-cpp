@@ -1,4 +1,5 @@
 #include "geobuf/geobuf.hpp"
+#include "geobuf/pbf_decoder.cpp"
 
 #include <mapbox/geojson_impl.hpp>
 #include <mapbox/geojson_value_impl.hpp>
@@ -345,6 +346,12 @@ void Encoder::writeMultiLine(const LinesType &lines, Encoder::Pbf &pbf)
 void Encoder::writeMultiPolygon(const PolygonsType &polygons, Encoder::Pbf &pbf)
 {
     //
+}
+
+std::string Decoder::to_printable(const std::string &pbf_bytes)
+{
+    // TODO
+    return ::decode(pbf_bytes.data(), pbf_bytes.size(), "");
 }
 }
 }
