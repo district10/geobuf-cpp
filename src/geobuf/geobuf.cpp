@@ -1,19 +1,97 @@
 #include "geobuf/geobuf.hpp"
 
+#include <mapbox/geojson_impl.hpp>
+#include <mapbox/geojson_value_impl.hpp>
+
+#include "rapidjson/error/en.h"
+#include "rapidjson/filereadstream.h"
+#include "rapidjson/filewritestream.h"
+#include "rapidjson/prettywriter.h"
+#include "rapidjson/stringbuffer.h"
+
 #include <protozero/pbf_builder.hpp>
 #include <protozero/pbf_reader.hpp>
 
 #define DBG_MACRO_NO_WARNING
 #include "dbg.h"
 
+constexpr const auto RJFLAGS = rapidjson::kParseDefaultFlags |
+                               rapidjson::kParseCommentsFlag |
+                               rapidjson::kParseTrailingCommasFlag;
+
 constexpr uint32_t maxPrecision = 1e6;
 constexpr uint32_t dimXY = 2;
 constexpr uint32_t dimXYZ = 2;
+
+using RapidjsonDocument = mapbox::geojson::rapidjson_document;
 
 namespace mapbox
 {
 namespace geobuf
 {
+RapidjsonValue load_json(const std::string &path)
+{
+    FILE *fp = fopen(path.c_str(), "rb");
+    if (!fp) {
+        return {};
+    }
+    char readBuffer[65536];
+    rapidjson::FileReadStream is(fp, readBuffer, sizeof(readBuffer));
+    RapidjsonDocument d;
+    d.ParseStream<RJFLAGS>(is);
+    fclose(fp);
+    return d.GetObject();
+}
+bool dump_json(const std::string &path, const RapidjsonValue &json, bool indent)
+{
+    using namespace rapidjson;
+    FILE *fp = fopen(path.c_str(), "wb");
+    if (!fp) {
+        return false;
+    }
+    char writeBuffer[65536];
+    FileWriteStream os(fp, writeBuffer, sizeof(writeBuffer));
+    if (indent) {
+        PrettyWriter<FileWriteStream> writer(os);
+        json.Accept(writer);
+    } else {
+        Writer<FileWriteStream> writer(os);
+        json.Accept(writer);
+    }
+    fclose(fp);
+    return true;
+}
+
+RapidjsonValue parse(const std::string &json, bool raise_error)
+{
+    RapidjsonDocument d;
+    rapidjson::StringStream ss(json.c_str());
+    d.ParseStream<RJFLAGS>(ss);
+    if (d.HasParseError()) {
+        if (raise_error) {
+            throw std::invalid_argument(
+                "invalid json, offset: " + std::to_string(d.GetErrorOffset()) +
+                ", error: " + rapidjson::GetParseError_En(d.GetParseError()));
+        } else {
+            return RapidjsonValue{};
+        }
+    }
+    return d.GetObject();
+}
+
+std::string dump(const RapidjsonValue &json, bool indent)
+{
+    rapidjson::StringBuffer buffer;
+    if (indent) {
+        rapidjson::PrettyWriter<rapidjson::StringBuffer> writer(buffer);
+        json.Accept(writer);
+    } else {
+        rapidjson::Writer<rapidjson::StringBuffer> writer(buffer);
+        json.Accept(writer);
+    }
+    return buffer.GetString();
+}
+
 Encoder::Pbf Encoder::encode(const mapbox::geojson::geojson &geojson)
 {
     assert(keys.empty());
@@ -157,8 +235,8 @@ void Encoder::writeFeature(const mapbox::geojson::feature &feature, Pbf &pbf)
         feature.id.match([&](int64_t id) { pbf.add_int64(12, id); },
                          [&](const std::string &id) { pbf.add_string(11, id); },
                          [&](const auto &) {
-                             dbg("unhandled id type",
-                                 mapbox::geojson::stringify(feature.id));
+                             //  dbg("unhandled id type",
+                             //      mapbox::geojson::stringify(feature.id));
                          });
     }
     if (!feature.properties.empty()) {
@@ -227,7 +305,7 @@ void Encoder::writeValue(const mapbox::feature::value &value, Encoder::Pbf &pbf)
                 [&](double val) { pbf.add_uint64(2, val); },
                 [&](const std::string &val) { pbf.add_string(1, val); },
                 [&](const auto &val) {
-                    pbf.add_string(6, mapbox::geojson::stringify(value));
+                    // pbf.add_string(6, mapbox::geojson::stringify(value));
                 });
     //
 }

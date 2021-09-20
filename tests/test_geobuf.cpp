@@ -20,6 +20,8 @@ std::vector<std::string> FIXTURES = {
 
 void roundtripTest(const std::string &path)
 {
+    auto j = mapbox::geobuf::load_json(path);
+    // dbg(mapbox::geobuf::dump(j, true));
     // json -> pbf -> json
     // TODO
 }
@@ -28,4 +30,9 @@ TEST_CASE("load configs")
 {
     dbg(FIXTURES_DIR);
     dbg(FIXTURES);
+    for (auto &basename : FIXTURES) {
+        auto path =
+            dbg(std::string{FIXTURES_DIR + std::string("/") + basename});
+        roundtripTest(path);
+    }
 }

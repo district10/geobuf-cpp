@@ -36,7 +36,7 @@ include_directories(
     ${PROJECT_SOURCE_DIR}/3rdparties/geojson-cpp/include/
     ${PROJECT_SOURCE_DIR}/3rdparties/geometry.hpp/include
     ${PROJECT_SOURCE_DIR}/3rdparties/protozero/include
-    ${PROJECT_SOURCE_DIR}/3rdparties/rapidjson
+    ${PROJECT_SOURCE_DIR}/3rdparties/rapidjson/include
     ${PROJECT_SOURCE_DIR}/3rdparties/variant/include
     ${PROJECT_SOURCE_DIR}/src)
 

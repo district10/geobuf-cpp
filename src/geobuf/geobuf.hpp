@@ -1,6 +1,7 @@
 #pragma once
 
 #include <mapbox/geojson.hpp>
+#include <mapbox/geojson/rapidjson.hpp>
 #include <protozero/pbf_builder.hpp>
 #include <protozero/pbf_reader.hpp>
 
@@ -11,6 +12,15 @@ namespace geobuf
 using PointsType = mapbox::geojson::multi_point::container_type;
 using LinesType = mapbox::geojson::multi_line_string::container_type;
 using PolygonsType = mapbox::geojson::multi_polygon::container_type;
+
+using RapidjsonValue = mapbox::geojson::rapidjson_value;
+
+RapidjsonValue load_json(const std::string &path);
+bool dump_json(const std::string &path, const RapidjsonValue &json,
+               bool indent = false);
+
+RapidjsonValue parse(const std::string &json, bool raise_error = false);
+std::string dump(const RapidjsonValue &json, bool indent = false);
 
 struct Encoder
 {
