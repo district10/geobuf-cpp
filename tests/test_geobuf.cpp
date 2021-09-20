@@ -55,16 +55,9 @@ TEST_CASE("read write json")
     }
 }
 
-TEST_CASE("load configs")
+TEST_CASE("decoding test")
 {
-    dbg(FIXTURES_DIR);
-    dbg(FIXTURES);
-    for (auto &path : FIXTURES) {
-        // roundtripTest(path);
-    }
-    auto path = std::string(PROJECT_BINARY_DIR "/js/issue55.json.pbf");
-    // std::string path =
-    // "/home/tzx/git/geobuf-cpp/geobuf/test/fixtures/issue55.json";
+    auto path = std::string(PROJECT_BINARY_DIR "/js/sample1.json.pbf");
     auto decoder = mapbox::geobuf::Decoder();
     auto geojson = decoder.decode(mapbox::geobuf::load_bytes(path));
     dbg(mapbox::geojson::stringify(geojson));

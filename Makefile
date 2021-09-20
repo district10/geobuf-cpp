@@ -33,7 +33,7 @@ test_all:
 	@cd build && for t in $(wildcard $(BUILD_DIR)/bin/test_*); do echo $$t && eval $$t >/dev/null 2>&1 && echo 'ok' || echo $(RED)Not Ok$(NC); done
 
 
-INPUT_GEOJSON_PATH ?= geobuf/test/fixtures/issue55.json
+INPUT_GEOJSON_PATH ?= data/sample1.json
 GEOJSON_BASENAME = $(shell basename $(abspath $(INPUT_GEOJSON_PATH)))
 
 OUTPUT_DIR_JS ?= $(BUILD_DIR)/js

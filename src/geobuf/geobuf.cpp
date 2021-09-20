@@ -629,6 +629,25 @@ mapbox::geojson::geometry Decoder::readGeometry(Pbf &pbf)
                 coords, 0, coords.size() / dim, dim, inv_e, true)};
             polygons = mapbox::geojson::multi_polygon{{{std::move(shell)}}};
         } else {
+            auto ret = mapbox::geojson::multi_polygon{};
+            int n_polygons = lengths[0];
+            ret.reserve(lengths[0]);
+            int lastIndex = 0;
+            // #polygons #ring ring1_size ring2_size ...
+            for (int i = 0, j = 1; i < n_polygons; i++) {
+                auto poly = mapbox::geojson::polygon{};
+                int n_rings = lengths[j++];
+                poly.reserve(n_rings);
+                for (int k = 0; k < n_rings; ++k) {
+                    int n_points = lengths[j++];
+                    auto ring = mapbox::geojson::line_string{populate_points(
+                        coords, lastIndex, n_points, dim, inv_e, true)};
+                    poly.push_back(std::move(ring));
+                    lastIndex += n_points;
+                }
+                ret.push_back(std::move(poly));
+            }
+            polygons = std::move(ret);
         }
     };
 
