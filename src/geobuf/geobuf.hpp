@@ -48,8 +48,13 @@ struct Encoder
     void writeValue(const mapbox::feature::value &value, Pbf &pbf);
     void writePoint(const mapbox::geojson::point &point, Pbf &pbf);
     void writeLine(const PointsType &line, Pbf &pbf);
-    void writeMultiLine(const LinesType &lines, Pbf &pbf);
+    // implict close=false is JS, we don't do that
+    void writeMultiLine(const LinesType &lines, Pbf &pbf, bool closed);
     void writeMultiPolygon(const PolygonsType &polygons, Pbf &pbf);
+    std::vector<int64_t> populateLine(const PointsType &line, bool closed);
+    void populateLine(std::vector<int64_t> &coords, //
+                      const PointsType &line,       //
+                      bool closed);
 
     uint32_t dim = 2;
     uint32_t e = 1;

@@ -282,11 +282,11 @@ void Encoder::writeGeometry(const mapbox::geojson::geometry &geometry,
         },
         [&](const mapbox::geojson::multi_line_string &lines) {
             pbf.add_enum(1, 3);
-            writeMultiLine((LinesType &)lines, pbf);
+            writeMultiLine((LinesType &)lines, pbf, false);
         },
         [&](const mapbox::geojson::polygon &polygon) {
             pbf.add_enum(1, 4);
-            writeMultiLine((LinesType &)polygon, pbf);
+            writeMultiLine((LinesType &)polygon, pbf, true);
         },
         [&](const mapbox::geojson::multi_polygon &polygons) {
             pbf.add_enum(1, 5);
@@ -332,20 +332,83 @@ void Encoder::writeValue(const mapbox::feature::value &value, Encoder::Pbf &pbf)
 
 void Encoder::writePoint(const mapbox::geojson::point &point, Encoder::Pbf &pbf)
 {
-    //
+    std::vector<int64_t> coords;
+    coords.reserve(dim);
+    const double *ptr = &point.x;
+    for (int i = 0; i < dim; ++i) {
+        coords.push_back(std::round(ptr[i]) * e);
+    }
+    pbf.add_packed_sfixed64(3, coords.begin(), coords.end());
 }
+
 void Encoder::writeLine(const PointsType &line, Encoder::Pbf &pbf)
 {
-
-    //
+    auto coords = populateLine(line, false);
+    pbf.add_packed_sfixed64(3, coords.begin(), coords.end());
 }
-void Encoder::writeMultiLine(const LinesType &lines, Encoder::Pbf &pbf)
+void Encoder::writeMultiLine(const LinesType &lines, Encoder::Pbf &pbf,
+                             bool closed)
 {
-    //
+    int len = lines.size();
+    if (len != 1) { // better use "> 1" ?
+        std::vector<std::uint32_t> lengths;
+        lengths.reserve(len);
+        for (auto &line : lines) {
+            lengths.push_back(line.size() - (closed ? 1 : 0));
+        }
+        pbf.add_packed_uint32(2, lengths.begin(), lengths.end());
+    }
+    std::vector<int64_t> coords;
+    for (auto &line : lines) {
+        populateLine(coords, line, closed);
+    }
+    pbf.add_packed_sfixed64(3, coords.begin(), coords.end());
 }
 void Encoder::writeMultiPolygon(const PolygonsType &polygons, Encoder::Pbf &pbf)
 {
-    //
+    int len = polygons.size();
+    if (len != 1 || polygons[0].size() != 1) {
+        std::vector<std::uint32_t> lengths;
+        lengths.push_back(len);
+        for (auto &polygon : polygons) {
+            lengths.push_back(polygon.size());
+            for (auto &ring : polygon) {
+                lengths.push_back(ring.size());
+            }
+        }
+        pbf.add_packed_uint32(2, lengths.begin(), lengths.end());
+    }
+    std::vector<int64_t> coords;
+    for (auto &polygon : polygons) {
+        for (auto &ring : polygon) {
+            populateLine(coords, ring, true);
+        }
+    }
+    pbf.add_packed_sfixed64(3, coords.begin(), coords.end());
+}
+
+std::vector<int64_t> Encoder::populateLine(const PointsType &line, bool closed)
+{
+    std::vector<int64_t> coords;
+    populateLine(coords, line, closed);
+    return coords;
+}
+
+void Encoder::populateLine(std::vector<int64_t> &coords, //
+                           const PointsType &line,       //
+                           bool closed)
+{
+    coords.reserve(coords.size() + dim * line.size());
+    int len = line.size() - (closed ? 1 : 0);
+    auto sum = std::vector<int64_t>(dim, 0);
+    for (int i = 0; i < len; ++i) {
+        const double *ptr = &line[i].x;
+        for (int j = 0; j < dim; ++j) {
+            int64_t n = ptr[j] * e - sum[j];
+            coords.push_back(n);
+            sum[j] += n;
+        }
+    }
 }
 
 std::string Decoder::to_printable(const std::string &pbf_bytes)
