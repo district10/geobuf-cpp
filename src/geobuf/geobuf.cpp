@@ -14,10 +14,10 @@
 #include <protozero/pbf_builder.hpp>
 #include <protozero/pbf_reader.hpp>
 
+#ifdef _DEBUG
 #define DBG_MACRO_NO_WARNING
 #include "dbg.h"
-#ifndef _DEBUG
-#undef dbg
+#else
 #define dbg(x) x
 #endif
 
@@ -159,7 +159,7 @@ std::string Encoder::encode(const mapbox::geojson::geojson &geojson)
     std::string data;
     Encoder::Pbf pbf{data};
     for (auto &kv : keys_vec) {
-        pbf.add_string(1, kv.first->c_str());
+        pbf.add_string(1, *kv.first);
     }
     if (dim != 2) {
         pbf.add_uint32(2, dim);
@@ -354,9 +354,9 @@ void Encoder::writeValue(const mapbox::feature::value &value, Encoder::Pbf &pbf)
     value.match([&](bool val) { pbf.add_bool(5, val); },
                 [&](uint64_t val) { pbf.add_uint64(3, val); },
                 [&](int64_t val) { pbf.add_uint64(4, -val); },
-                [&](double val) { pbf.add_uint64(2, val); },
+                [&](double val) { pbf.add_double(2, val); },
                 [&](const std::string &val) { pbf.add_string(1, val); },
-                [&](const auto &) { pbf.add_string(1, dump(to_json(value))); });
+                [&](const auto &) { pbf.add_string(6, dump(to_json(value))); });
     //
 }
 
@@ -366,7 +366,7 @@ void Encoder::writePoint(const mapbox::geojson::point &point, Encoder::Pbf &pbf)
     coords.reserve(dim);
     const double *ptr = &point.x;
     for (int i = 0; i < dim; ++i) {
-        coords.push_back(std::round(ptr[i]) * e);
+        coords.push_back(std::round(ptr[i] * e));
     }
     pbf.add_packed_sint64(3, coords.begin(), coords.end());
 }
@@ -403,7 +403,7 @@ void Encoder::writeMultiPolygon(const PolygonsType &polygons, Encoder::Pbf &pbf)
         for (auto &polygon : polygons) {
             lengths.push_back(polygon.size()); // n_rings
             for (auto &ring : polygon) {
-                lengths.push_back(ring.size()); // n_points
+                lengths.push_back(ring.size() - 1); // n_points
             }
         }
         pbf.add_packed_uint32(2, lengths.begin(), lengths.end());
@@ -414,7 +414,7 @@ void Encoder::writeMultiPolygon(const PolygonsType &polygons, Encoder::Pbf &pbf)
             populateLine(coords, ring, true);
         }
     }
-    pbf.add_packed_sfixed64(3, coords.begin(), coords.end());
+    pbf.add_packed_sint64(3, coords.begin(), coords.end());
 }
 
 std::vector<int64_t> Encoder::populateLine(const PointsType &line, bool closed)
@@ -430,11 +430,11 @@ void Encoder::populateLine(std::vector<int64_t> &coords, //
 {
     coords.reserve(coords.size() + dim * line.size());
     int len = line.size() - (closed ? 1 : 0);
-    auto sum = std::vector<int64_t>(dim, 0);
+    auto sum = std::array<double, 3>{0.0, 0.0, 0.0};
     for (int i = 0; i < len; ++i) {
         const double *ptr = &line[i].x;
         for (int j = 0; j < dim; ++j) {
-            auto n = static_cast<int64_t>(ptr[j] * e) - sum[j];
+            auto n = static_cast<int64_t>(std::round(ptr[j] * e)) - sum[j];
             coords.push_back(n);
             sum[j] += n;
         }
@@ -469,7 +469,7 @@ mapbox::geojson::geojson Decoder::decode(const std::string &pbf_bytes)
             protozero::pbf_reader pbf_g = pbf.get_message();
             return readGeometry(pbf_g);
         } else {
-            dbg("unhandled tag");
+            // dbg("unhandled tag");
             pbf.skip();
         }
     }
@@ -485,10 +485,10 @@ mapbox::geojson::feature_collection Decoder::readFeatureCollection(Pbf &pbf)
             fc.push_back(readFeature(pbf_f));
         } else if (tag == 13 || tag == 15) {
             pbf.skip();
-            dbg("TODO custom properties");
+            // dbg("TODO custom properties");
         } else {
             pbf.skip();
-            dbg("unhandled pbf type");
+            // dbg("unhandled pbf type");
         }
     }
     return fc;
@@ -512,7 +512,7 @@ mapbox::geojson::feature Decoder::readFeature(Pbf &pbf)
         } else if (tag == 14) {
             auto indexes = pbf.get_packed_uint32();
             if (indexes.size() % 2 != 0) {
-                dbg("something went wrong");
+                // dbg("something went wrong");
                 continue;
             }
             for (auto it = indexes.begin(); it != indexes.end();) {
@@ -558,11 +558,12 @@ mapbox::geojson::geometry Decoder::readGeometry(Pbf &pbf)
     auto populatePoint = [&](mapbox::geojson::geometry &point,
                              const std::vector<int64_t> &coords) {
         if (dim == 3) {
-            point = mapbox::geojson::point(coords[0] * inv_e, coords[1] * inv_e,
+            point = mapbox::geojson::point(coords[0] * inv_e, //
+                                           coords[1] * inv_e, //
                                            coords[2] * inv_e);
         } else {
-            point =
-                mapbox::geojson::point(coords[0] * inv_e, coords[1] * inv_e);
+            point = mapbox::geojson::point(coords[0] * inv_e, //
+                                           coords[1] * inv_e);
         }
     };
 
@@ -676,7 +677,6 @@ mapbox::geojson::geometry Decoder::readGeometry(Pbf &pbf)
             } else if (type == 6) {
                 //
             } else {
-                dbg("something went wrong");
                 return g;
             }
         } else if (tag == 4) {
@@ -686,15 +686,11 @@ mapbox::geojson::geometry Decoder::readGeometry(Pbf &pbf)
             g.get<mapbox::geojson::geometry_collection>().push_back(
                 readGeometry(pbf));
         } else if (tag == 13 || tag == 15) {
-            dbg("TODO custom properties");
+            // dbg("TODO custom properties");
         }
     }
     return g;
 }
-void Decoder::readFeatureColectionField(Pbf &pbf) {}
-void Decoder::readFeatureField(Pbf &pbf) {}
-void Decoder::readGeometryField(Pbf &pbf) {}
-void Decoder::readCoords(Pbf &pbf) {}
 mapbox::geojson::value Decoder::readValue(Pbf &pbf)
 {
     if (!pbf.next()) {
@@ -712,25 +708,11 @@ mapbox::geojson::value Decoder::readValue(Pbf &pbf)
     } else if (tag == 5) {
         return pbf.get_bool();
     } else if (tag == 6) {
-        auto text = pbf.get_string();
-        return text;
-        // TODO
-        // mapbox::geobuf::parse(text);
+        return json2geojson(parse(pbf.get_string()));
     } else {
         pbf.skip();
     }
     return {};
 }
-mapbox::feature::property_map Decoder::readProps(Pbf &pbf)
-{
-    mapbox::feature::property_map props;
-    //
-    return props;
-}
-void Decoder::readPoint(Pbf &pbf) {}
-void Decoder::readLinePart(Pbf &pbf) {}
-void Decoder::readLine(Pbf &pbf) {}
-void Decoder::readMultiLine(Pbf &pbf) {}
-void Decoder::readMultiPolygon(Pbf &pbf) {}
 }
 }

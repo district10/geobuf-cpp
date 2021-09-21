@@ -111,7 +111,11 @@
         },
         {
             "type": "Feature",
-            "properties": {},
+            "properties": {
+                "key": {
+                    "nested": "key"
+                }
+            },
             "geometry": {
                 "type": "MultiPolygon",
                 "coordinates": [

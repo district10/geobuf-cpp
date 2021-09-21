@@ -81,17 +81,7 @@ struct Decoder
     mapbox::geojson::feature_collection readFeatureCollection(Pbf &pbf);
     mapbox::geojson::feature readFeature(Pbf &pbf);
     mapbox::geojson::geometry readGeometry(Pbf &pbf);
-    void readFeatureColectionField(Pbf &pbf);
-    void readFeatureField(Pbf &pbf);
-    void readGeometryField(Pbf &pbf);
-    void readCoords(Pbf &pbf);
     mapbox::geojson::value readValue(Pbf &pbf);
-    mapbox::feature::property_map readProps(Pbf &pbf);
-    void readPoint(Pbf &pbf);
-    void readLinePart(Pbf &pbf);
-    void readLine(Pbf &pbf);
-    void readMultiLine(Pbf &pbf);
-    void readMultiPolygon(Pbf &pbf);
 
     const uint32_t maxPrecision;
     uint32_t dim = 2;
