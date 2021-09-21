@@ -32,6 +32,7 @@ std::string dump(const mapbox::geojson::value &geojson, bool indent = false);
 struct Encoder
 {
     using Pbf = protozero::pbf_writer;
+    Encoder(uint32_t maxPrecision = 1e6) : maxPrecision(maxPrecision) {}
     std::string encode(const mapbox::geojson::geojson &geojson);
 
   private:
@@ -62,6 +63,7 @@ struct Encoder
                       const PointsType &line,       //
                       bool closed);
 
+    const uint32_t maxPrecision;
     uint32_t dim = 2;
     uint32_t e = 1;
     std::unordered_map<std::string, std::uint32_t> keys;
@@ -70,6 +72,8 @@ struct Encoder
 struct Decoder
 {
     using Pbf = protozero::pbf_reader;
+    Decoder(uint32_t maxPrecision = 1e6) : maxPrecision(maxPrecision) {}
+
     static std::string to_printable(const std::string &pbf_bytes);
     mapbox::geojson::geojson decode(const std::string &pbf_bytes);
 
@@ -89,6 +93,7 @@ struct Decoder
     void readMultiLine(Pbf &pbf);
     void readMultiPolygon(Pbf &pbf);
 
+    const uint32_t maxPrecision;
     uint32_t dim = 2;
     uint32_t e = 1;
     std::vector<std::string> keys;

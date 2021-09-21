@@ -52,4 +52,4 @@ roundtrip_test_js:
 roundtrip_test_cpp:
 	@umask 0000 && mkdir -p $(OUTPUT_DIR_CXX)
 	$(BUILD_DIR)/bin/json2geobuf $(INPUT_GEOJSON_PATH) > $(OUTPUT_PBF_CXX)
-	$(BUILD_DIR)/bin/geobuf2json $(OUTPUT_PBF_JS) | $(JQ) . > $(OUTPUT_JSN_CXX)
+	$(BUILD_DIR)/bin/geobuf2json $(OUTPUT_PBF_CXX) | $(JQ) . > $(OUTPUT_JSN_CXX)

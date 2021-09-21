@@ -16,7 +16,7 @@
 
 #define DBG_MACRO_NO_WARNING
 #include "dbg.h"
-#if _DEBUG
+#ifndef _DEBUG
 #undef dbg
 #define dbg(x) x
 #endif
@@ -25,9 +25,8 @@ constexpr const auto RJFLAGS = rapidjson::kParseDefaultFlags |
                                rapidjson::kParseCommentsFlag |
                                rapidjson::kParseTrailingCommasFlag;
 
-constexpr uint32_t maxPrecision = 1e6;
 constexpr uint32_t dimXY = 2;
-constexpr uint32_t dimXYZ = 2;
+constexpr uint32_t dimXYZ = 3;
 
 using RapidjsonDocument = mapbox::geojson::rapidjson_document;
 using RapidjsonAllocator = mapbox::geojson::rapidjson_allocator;
@@ -86,14 +85,23 @@ bool dump_bytes(const std::string &path, const std::string &bytes)
     return true;
 }
 
-RapidjsonValue geojson2json(const mapbox::geojson::value &geojson)
+template <typename T> RapidjsonValue to_json(const T &t)
 {
     RapidjsonAllocator allocator;
-    return mapbox::geojson::value::visit(geojson,
-                                         mapbox::geojson::to_value{allocator});
+    return T::visit(t, mapbox::geojson::to_value{allocator});
+}
+
+RapidjsonValue geojson2json(const mapbox::geojson::value &geojson)
+{
+    return to_json(geojson);
 }
 
 mapbox::geojson::value json2geojson(const RapidjsonValue &json)
+{
+    return mapbox::geojson::convert<mapbox::geojson::value>(json);
+}
+
+mapbox::geojson::value to_geojson(const RapidjsonValue &json)
 {
     return mapbox::geojson::convert<mapbox::geojson::value>(json);
 }
@@ -130,12 +138,12 @@ std::string dump(const RapidjsonValue &json, bool indent)
 
 std::string dump(const mapbox::geojson::value &geojson, bool indent)
 {
-    return dump(geojson2json(geojson), indent);
+    return dump(to_json(geojson), indent);
 }
 
 std::string Encoder::encode(const mapbox::geojson::geojson &geojson)
 {
-    assert(keys.empty());
+    keys.clear();
     analyze(geojson);
 
     std::vector<std::pair<const std::string *, uint32_t>> keys_vec;
@@ -163,13 +171,16 @@ std::string Encoder::encode(const mapbox::geojson::geojson &geojson)
 
     geojson.match(
         [&](const mapbox::geojson::feature_collection &features) {
-            writeFeatureCollection(features, pbf);
+            protozero::pbf_writer pbf_fc{pbf, 4};
+            writeFeatureCollection(features, pbf_fc);
         },
         [&](const mapbox::geojson::feature &feature) {
-            writeFeature(feature, pbf);
+            protozero::pbf_writer pbf_f{pbf, 5};
+            writeFeature(feature, pbf_f);
         },
         [&](const mapbox::geojson::geometry &geometry) {
-            writeFeature(geometry, pbf);
+            protozero::pbf_writer pbf_g{pbf, 6};
+            writeFeature(geometry, pbf_g);
         });
     keys.clear();
     return data;
@@ -204,17 +215,14 @@ void Encoder::analyzeGeometry(const mapbox::geojson::geometry &geometry)
             analyzePoints(points);
         },
         [&](const mapbox::geojson::polygon &polygon) {
-            analyzeMultiLine(
-                (mapbox::geojson::multi_line_string::container_type &)polygon);
+            analyzeMultiLine((LinesType &)polygon);
         },
         [&](const mapbox::geojson::multi_line_string &lines) {
             analyzeMultiLine(lines);
         },
         [&](const mapbox::geojson::multi_polygon &polygons) {
             for (auto &polygon : polygons) {
-                analyzeMultiLine(
-                    (mapbox::geojson::multi_line_string::container_type &)
-                        polygon);
+                analyzeMultiLine((LinesType &)polygon);
             }
         },
         [&](const mapbox::geojson::geometry_collection &geoms) {
@@ -225,15 +233,13 @@ void Encoder::analyzeGeometry(const mapbox::geojson::geometry &geometry)
         [&](const mapbox::geojson::empty &null) {});
 }
 
-void Encoder::analyzeMultiLine(
-    const mapbox::geojson::multi_line_string::container_type &lines)
+void Encoder::analyzeMultiLine(const LinesType &lines)
 {
     for (auto &line : lines) {
         analyzePoints(line);
     }
 }
-void Encoder::analyzePoints(
-    const mapbox::geojson::multi_point::container_type &points)
+void Encoder::analyzePoints(const PointsType &points)
 {
     for (auto &point : points) {
         analyzePoint(point);
@@ -242,7 +248,10 @@ void Encoder::analyzePoints(
 
 void Encoder::analyzePoint(const mapbox::geojson::point &point)
 {
-    dim = std::max(point.z != 0 ? dimXY : dimXYZ, dim);
+    dim = std::max(point.z == 0 ? dimXY : dimXYZ, dim);
+    if (e >= maxPrecision) {
+        return;
+    }
     const double *ptr = &point.x;
     for (int i = 0; i < dim; ++i) {
         while (std::round(ptr[i] * e) / e != ptr[i] && e < maxPrecision) {
@@ -261,11 +270,11 @@ void Encoder::saveKey(const std::string &key)
 void Encoder::writeFeatureCollection(
     const mapbox::geojson::feature_collection &geojson, Pbf &pbf)
 {
-    protozero::pbf_writer pbf_fc{pbf, 4};
     for (auto &feature : geojson) {
-        protozero::pbf_writer pbf_f{pbf_fc, 1};
+        protozero::pbf_writer pbf_f{pbf, 1};
         writeFeature(feature, pbf_f);
     }
+    // TODO: custom props
 }
 
 void Encoder::writeFeature(const mapbox::geojson::feature &feature, Pbf &pbf)
@@ -278,12 +287,12 @@ void Encoder::writeFeature(const mapbox::geojson::feature &feature, Pbf &pbf)
         feature.id.match([&](int64_t id) { pbf.add_int64(12, id); },
                          [&](const std::string &id) { pbf.add_string(11, id); },
                          [&](const auto &) {
-                             dbg("unhandled id type");
-                             //      mapbox::geojson::stringify(feature.id));
+                             pbf.add_string(11, dump(to_json(feature.id)));
                          });
     }
     if (!feature.properties.empty()) {
         writeProps(feature.properties, pbf);
+        // TODO: custom props
     }
 }
 
@@ -322,8 +331,7 @@ void Encoder::writeGeometry(const mapbox::geojson::geometry &geometry,
                 writeGeometry(geom, pbf_sub);
             }
         },
-        [&](const auto &) { dbg("not handled geometry type"); } //
-        );
+        [&](const mapbox::geojson::empty &empty) {});
 }
 
 void Encoder::writeProps(const mapbox::feature::property_map &props,
@@ -338,6 +346,7 @@ void Encoder::writeProps(const mapbox::feature::property_map &props,
         indexes.push_back(valueIndex++);
     }
     pbf.add_packed_uint32(14, indexes.begin(), indexes.end());
+    // TODO: support custom properties
 }
 
 void Encoder::writeValue(const mapbox::feature::value &value, Encoder::Pbf &pbf)
@@ -347,9 +356,7 @@ void Encoder::writeValue(const mapbox::feature::value &value, Encoder::Pbf &pbf)
                 [&](int64_t val) { pbf.add_uint64(4, -val); },
                 [&](double val) { pbf.add_uint64(2, val); },
                 [&](const std::string &val) { pbf.add_string(1, val); },
-                [&](const auto &val) {
-                    // pbf.add_string(6, mapbox::geojson::stringify(value));
-                });
+                [&](const auto &) { pbf.add_string(1, dump(to_json(value))); });
     //
 }
 
@@ -373,7 +380,7 @@ void Encoder::writeMultiLine(const LinesType &lines, Encoder::Pbf &pbf,
                              bool closed)
 {
     int len = lines.size();
-    if (len != 1) { // better use "> 1" ?
+    if (len != 1) {
         std::vector<std::uint32_t> lengths;
         lengths.reserve(len);
         for (auto &line : lines) {
@@ -392,11 +399,11 @@ void Encoder::writeMultiPolygon(const PolygonsType &polygons, Encoder::Pbf &pbf)
     int len = polygons.size();
     if (len != 1 || polygons[0].size() != 1) {
         std::vector<std::uint32_t> lengths;
-        lengths.push_back(len);
+        lengths.push_back(len); // n_polygons
         for (auto &polygon : polygons) {
-            lengths.push_back(polygon.size());
+            lengths.push_back(polygon.size()); // n_rings
             for (auto &ring : polygon) {
-                lengths.push_back(ring.size());
+                lengths.push_back(ring.size()); // n_points
             }
         }
         pbf.add_packed_uint32(2, lengths.begin(), lengths.end());
@@ -436,7 +443,7 @@ void Encoder::populateLine(std::vector<int64_t> &coords, //
 
 std::string Decoder::to_printable(const std::string &pbf_bytes)
 {
-    // TODO
+    // TODO, read the code
     return ::decode(pbf_bytes.data(), pbf_bytes.size(), "");
 }
 
