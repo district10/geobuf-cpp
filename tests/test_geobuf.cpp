@@ -61,4 +61,20 @@ TEST_CASE("decoding test")
     auto decoder = mapbox::geobuf::Decoder();
     auto geojson = decoder.decode(mapbox::geobuf::load_bytes(path));
     dbg(mapbox::geojson::stringify(geojson));
+
+    double lon = 119.88281249999999;
+    dbg(lon);
+    dbg(lon * 1e6);
+    dbg(lon * 1000000);
+    dbg(std::round(lon * 1e6));
+    std::cout << std::setprecision(10)                                //
+              << ", lon:" << lon                                      //
+              << ", lon*1e6:" << lon * 1e6                            //
+              << ", lon*1000000:" << lon * 1000000                    //
+              << ", round(lon*1e6):" << std::round(lon * 1e6)         //
+              << ", round(lon*1000000):" << std::round(lon * 1000000) //
+              << std::endl;
+    //      119.88281249999999,
+    // js:  119.882812,
+    // cxx: 119.882813,
 }

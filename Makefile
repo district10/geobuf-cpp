@@ -56,7 +56,7 @@ roundtrip_test_cpp:
 	build/bin/pbf_decoder $(OUTPUT_PBF_CXX) > $(OUTPUT_DIR_CXX)/pbf.txt
 	$(BUILD_DIR)/bin/geobuf2json $(OUTPUT_PBF_JS) | $(JQ) . > $(OUTPUT_JSN_CXX)
 diff:
-	# code --diff $(OUTPUT_DIR_JS)/pbf.txt $(OUTPUT_DIR_CXX)/pbf.txt
+	code --diff $(OUTPUT_DIR_JS)/pbf.txt $(OUTPUT_DIR_CXX)/pbf.txt
 	code --diff $(OUTPUT_JSN_JS) $(OUTPUT_JSN_CXX)
 
 test:

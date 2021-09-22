@@ -366,7 +366,7 @@ void Encoder::writePoint(const mapbox::geojson::point &point, Encoder::Pbf &pbf)
     coords.reserve(dim);
     const double *ptr = &point.x;
     for (int i = 0; i < dim; ++i) {
-        coords.push_back(std::round(ptr[i] * e));
+        coords.push_back(static_cast<int64_t>(std::round(ptr[i] * e)));
     }
     pbf.add_packed_sint64(3, coords.begin(), coords.end());
 }
@@ -430,7 +430,7 @@ void Encoder::populateLine(std::vector<int64_t> &coords, //
 {
     coords.reserve(coords.size() + dim * line.size());
     int len = line.size() - (closed ? 1 : 0);
-    auto sum = std::array<double, 3>{0.0, 0.0, 0.0};
+    auto sum = std::array<int64_t, 3>{0, 0, 0};
     for (int i = 0; i < len; ++i) {
         const double *ptr = &line[i].x;
         for (int j = 0; j < dim; ++j) {
@@ -530,7 +530,7 @@ mapbox::geojson::feature Decoder::readFeature(Pbf &pbf)
 std::vector<mapbox::geojson::point>
 populate_points(const std::vector<int64_t> &int64s, //
                 int start_index, int length,        //
-                int dim, double inv_e, bool closed = false)
+                int dim, double e, bool closed = false)
 {
     auto coords = std::vector<mapbox::geojson::point>{};
     coords.resize(length + (closed ? 1 : 0));
@@ -539,7 +539,7 @@ populate_points(const std::vector<int64_t> &int64s, //
         double *p = &coords[i].x;
         for (int d = 0; d < dim; ++d) {
             prevP[d] += int64s[(start_index + i) * dim + d];
-            p[d] = prevP[d] * inv_e;
+            p[d] = prevP[d] / e;
         }
     }
     if (closed) {
@@ -553,17 +553,18 @@ mapbox::geojson::geometry Decoder::readGeometry(Pbf &pbf)
     if (!pbf.next()) {
         return {};
     }
-    double inv_e = 1.0 / e;
     const auto type = pbf.get_enum();
     auto populatePoint = [&](mapbox::geojson::geometry &point,
                              const std::vector<int64_t> &coords) {
         if (dim == 3) {
-            point = mapbox::geojson::point(coords[0] * inv_e, //
-                                           coords[1] * inv_e, //
-                                           coords[2] * inv_e);
+            point =
+                mapbox::geojson::point(coords[0] / static_cast<double>(e), //
+                                       coords[1] / static_cast<double>(e), //
+                                       coords[2] / static_cast<double>(e));
         } else {
-            point = mapbox::geojson::point(coords[0] * inv_e, //
-                                           coords[1] * inv_e);
+            point =
+                mapbox::geojson::point(coords[0] * static_cast<double>(e), //
+                                       coords[1] * static_cast<double>(e));
         }
     };
 
@@ -572,7 +573,7 @@ mapbox::geojson::geometry Decoder::readGeometry(Pbf &pbf)
         points = mapbox::geojson::multi_point{
             populate_points(coords,                 //
                             0, coords.size() / dim, //
-                            dim, inv_e)};
+                            dim, e)};
     };
 
     auto populateLineString = [&](mapbox::geojson::geometry &line,
@@ -580,7 +581,7 @@ mapbox::geojson::geometry Decoder::readGeometry(Pbf &pbf)
         line = mapbox::geojson::line_string{
             populate_points(coords,                 //
                             0, coords.size() / dim, //
-                            dim, inv_e)};
+                            dim, e)};
     };
 
     auto populateMultiLineString = [&](mapbox::geojson::geometry &lines,
@@ -588,14 +589,14 @@ mapbox::geojson::geometry Decoder::readGeometry(Pbf &pbf)
                                        const std::vector<int64_t> &coords) {
         if (lengths.empty()) {
             lines = mapbox::geojson::multi_line_string{
-                {populate_points(coords, 0, coords.size() / dim, dim, inv_e)}};
+                {populate_points(coords, 0, coords.size() / dim, dim, e)}};
         } else {
             int lastIndex = 0;
             auto ret = mapbox::geojson::multi_line_string{};
             ret.reserve(lengths.size());
             for (auto length : lengths) {
                 ret.push_back(mapbox::geojson::line_string{
-                    populate_points(coords, lastIndex, length, dim, inv_e)});
+                    populate_points(coords, lastIndex, length, dim, e)});
                 lastIndex += length;
             }
             lines = std::move(ret);
@@ -606,16 +607,16 @@ mapbox::geojson::geometry Decoder::readGeometry(Pbf &pbf)
                                const std::vector<uint32_t> &lengths,
                                const std::vector<int64_t> &coords) {
         if (lengths.empty()) {
-            auto shell = mapbox::geojson::line_string{populate_points(
-                coords, 0, coords.size() / dim, dim, inv_e, true)};
+            auto shell = mapbox::geojson::line_string{
+                populate_points(coords, 0, coords.size() / dim, dim, e, true)};
             polygon = mapbox::geojson::polygon{{std::move(shell)}};
         } else {
             int lastIndex = 0;
             auto ret = mapbox::geojson::polygon{};
             ret.reserve(lengths.size());
             for (auto length : lengths) {
-                ret.push_back(mapbox::geojson::line_string{populate_points(
-                    coords, lastIndex, length, dim, inv_e, true)});
+                ret.push_back(mapbox::geojson::line_string{
+                    populate_points(coords, lastIndex, length, dim, e, true)});
                 lastIndex += length;
             }
             polygon = std::move(ret);
@@ -626,8 +627,8 @@ mapbox::geojson::geometry Decoder::readGeometry(Pbf &pbf)
                                     const std::vector<uint32_t> &lengths,
                                     const std::vector<int64_t> &coords) {
         if (lengths.empty()) {
-            auto shell = mapbox::geojson::line_string{populate_points(
-                coords, 0, coords.size() / dim, dim, inv_e, true)};
+            auto shell = mapbox::geojson::line_string{
+                populate_points(coords, 0, coords.size() / dim, dim, e, true)};
             polygons = mapbox::geojson::multi_polygon{{{std::move(shell)}}};
         } else {
             auto ret = mapbox::geojson::multi_polygon{};
@@ -642,7 +643,7 @@ mapbox::geojson::geometry Decoder::readGeometry(Pbf &pbf)
                 for (int k = 0; k < n_rings; ++k) {
                     int n_points = lengths[j++];
                     auto ring = mapbox::geojson::line_string{populate_points(
-                        coords, lastIndex, n_points, dim, inv_e, true)};
+                        coords, lastIndex, n_points, dim, e, true)};
                     poly.push_back(std::move(ring));
                     lastIndex += n_points;
                 }
