@@ -21,10 +21,9 @@
 #define dbg(x) x
 #endif
 
-constexpr const auto RJFLAGS = rapidjson::kParseDefaultFlags |
-                               rapidjson::kParseCommentsFlag |
-                               rapidjson::kParseTrailingCommasFlag;
-
+constexpr const auto RJFLAGS =
+    rapidjson::kParseDefaultFlags | rapidjson::kParseCommentsFlag |
+    rapidjson::kParseFullPrecisionFlag | rapidjson::kParseTrailingCommasFlag;
 constexpr uint32_t dimXY = 2;
 constexpr uint32_t dimXYZ = 3;
 

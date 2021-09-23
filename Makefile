@@ -54,7 +54,7 @@ roundtrip_test_cpp:
 	@umask 0000 && mkdir -p $(OUTPUT_DIR_CXX)
 	$(BUILD_DIR)/bin/json2geobuf $(INPUT_GEOJSON_PATH) > $(OUTPUT_PBF_CXX)
 	build/bin/pbf_decoder $(OUTPUT_PBF_CXX) > $(OUTPUT_DIR_CXX)/pbf.txt
-	$(BUILD_DIR)/bin/geobuf2json $(OUTPUT_PBF_JS) | $(JQ) . > $(OUTPUT_JSN_CXX)
+	$(BUILD_DIR)/bin/geobuf2json $(OUTPUT_PBF_CXX) | $(JQ) . > $(OUTPUT_JSN_CXX)
 diff:
 	code --diff $(OUTPUT_DIR_JS)/pbf.txt $(OUTPUT_DIR_CXX)/pbf.txt
 	code --diff $(OUTPUT_JSN_JS) $(OUTPUT_JSN_CXX)
