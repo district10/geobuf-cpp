@@ -10,7 +10,7 @@ import glob
 import argparse
 
 PWD = os.path.abspath(os.path.dirname(__file__))
-CACHE_DIR = os.path.join(PWD, 'roundtrip_cache')
+CACHE_DIR = os.path.join(PWD, 'build/roundtrip_test')
 os.umask(0)
 os.makedirs(CACHE_DIR, exist_ok=True)
 
@@ -75,31 +75,32 @@ def roundtrip(input_json: str, *, force_rerun: bool = False,):
 
     input_path = f'{output_dir}/input.json'
     if not os.path.isfile(input_path):
-        shutil.copy(input_json, input_path)
+        # shutil.copy(input_json, input_path)
+        link = os.path.relpath(input_json, os.path.dirname(input_path))
+        os.symlink(link, input_path)
+    input_normalized = normalize_json(input_path, f'{output_dir}/input_normalized.json')
 
     t0j = time.time()
     roundtrip_js(input_path, f'{output_dir}/js.pbf', f'{output_dir}/js.json')
     t1j = time.time()
     logger.info(f'roundtrip ( js): {t1j - t0j:.3f} sec ({input_path})')
+    system(f'{PWD}/build/bin/pbf_decoder {output_dir}/js.pbf > {output_dir}/js.pbf.txt')
+    output_js = normalize_json(f'{output_dir}/js.json', f'{output_dir}/js_normalized.json')
 
     t0p = time.time()
     roundtrip_py(input_path, f'{output_dir}/py.pbf', f'{output_dir}/py.json')
     t1p = time.time()
     logger.info(f'roundtrip ( py): {t1p - t0p:.3f} sec ({input_path})')
+    system(f'{PWD}/build/bin/pbf_decoder {output_dir}/py.pbf > {output_dir}/py.pbf.txt')
+    output_py = normalize_json(f'{output_dir}/py.json', f'{output_dir}/py_normalized.json')
 
     t0c = time.time()
     roundtrip_cpp(input_path, f'{output_dir}/cpp.pbf', f'{output_dir}/cpp.json')
     t1c = time.time()
     logger.info(f'roundtrip (cpp): {t1c - t0c:.3f} sec ({input_path})')
-
-    system(f'{PWD}/build/bin/pbf_decoder {output_dir}/js.pbf > {output_dir}/js.pbf.txt')
-    system(f'{PWD}/build/bin/pbf_decoder {output_dir}/py.pbf > {output_dir}/py.pbf.txt')
     system(f'{PWD}/build/bin/pbf_decoder {output_dir}/cpp.pbf > {output_dir}/cpp.pbf.txt')
-
-    input_normalized = normalize_json(input_path, f'{output_dir}/input_normalized.json')
-    output_js = normalize_json(f'{output_dir}/js.json', f'{output_dir}/js_normalized.json')
-    output_py = normalize_json(f'{output_dir}/py.json', f'{output_dir}/py_normalized.json')
     output_cpp = normalize_json(f'{output_dir}/cpp.json', f'{output_dir}/cpp_normalized.json')
+
     system(f'diff {input_normalized} {output_js} > {output_dir}/diff_input_output_js.diff', assert_return=False)
     system(f'diff {output_js} {output_py} > {output_dir}/diff_js_py.diff', assert_return=False)
     system(f'diff {output_js} {output_cpp} > {output_dir}/diff_js_cpp.diff', assert_return=False)
@@ -133,4 +134,6 @@ if __name__ == '__main__':
         roundtrip(input_path)
     else:
         for path in sorted(glob.glob(f'{input_path}/*.json')):
+            if 'precision.json' == path.split('/')[-1]:
+                continue
             roundtrip(path)

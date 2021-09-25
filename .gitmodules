@@ -25,3 +25,6 @@
 [submodule "3rdparties/rapidjson"]
 	path = 3rdparties/rapidjson
 	url = https://github.com/Tencent/rapidjson.git
+[submodule "pygeobuf"]
+	path = pygeobuf
+	url = https://github.com/pygeobuf/pygeobuf.git

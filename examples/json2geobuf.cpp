@@ -3,10 +3,21 @@
 
 int main(int argc, char *argv[])
 {
-    auto encoder = mapbox::geobuf::Encoder();
-    auto json = mapbox::geobuf::load_json(argv[1]);
+    // usage:
+    //      cat input.json | json2geobuf > output.pbf
+    //      json2geobuf input.json > output.pbf
+    //      json2geobuf input.json output.pbf
+    const char *precision = std::getenv("GEOBUF_PRECISION"); // default 6
+    auto encoder =
+        precision ? mapbox::geobuf::Encoder(std::pow(10, std::atoi(precision)))
+                  : mapbox::geobuf::Encoder();
+    auto json = argc > 1 ? mapbox::geobuf::load_json(argv[1])
+                         : mapbox::geobuf::load_json();
     auto geojson = mapbox::geojson::convert(json);
     auto pbf = encoder.encode(geojson);
+    if (argc > 2) {
+        return mapbox::geobuf::dump_bytes(argv[2], pbf) ? 0 : -1;
+    }
     std::cout << pbf;
     return 0;
 }

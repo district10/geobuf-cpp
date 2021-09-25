@@ -83,7 +83,6 @@ bool dump_json(const std::string &path, const RapidjsonValue &json, bool indent)
     return dump_json(fp, json, indent);
 }
 
-// write to stdout
 bool dump_json(const RapidjsonValue &json, bool indent)
 {
     return dump_json(stdout, json, indent);
@@ -95,6 +94,11 @@ std::string load_bytes(const std::string &path)
     std::stringstream buffer;
     buffer << t.rdbuf();
     return buffer.str();
+}
+std::string load_bytes()
+{
+    std::istreambuf_iterator<char> begin(std::cin), end;
+    return std::string(begin, end);
 }
 bool dump_bytes(const std::string &path, const std::string &bytes)
 {
@@ -650,8 +654,8 @@ mapbox::geojson::geometry Decoder::readGeometry(Pbf &pbf)
                                        coords[2] / static_cast<double>(e));
         } else {
             point =
-                mapbox::geojson::point(coords[0] * static_cast<double>(e), //
-                                       coords[1] * static_cast<double>(e));
+                mapbox::geojson::point(coords[0] / static_cast<double>(e), //
+                                       coords[1] / static_cast<double>(e));
         }
     };
 
@@ -772,8 +776,9 @@ mapbox::geojson::geometry Decoder::readGeometry(Pbf &pbf)
             if (!g.is<mapbox::geojson::geometry_collection>()) {
                 g = mapbox::geojson::geometry_collection{};
             }
+            protozero::pbf_reader pbf_g = pbf.get_message();
             g.get<mapbox::geojson::geometry_collection>().push_back(
-                readGeometry(pbf));
+                readGeometry(pbf_g));
         } else if (tag == 13) {
             protozero::pbf_reader pbf_v = pbf.get_message();
             values.push_back(readValue(pbf_v));

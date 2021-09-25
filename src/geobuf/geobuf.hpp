@@ -26,6 +26,7 @@ bool dump_json(const RapidjsonValue &json,
                bool indent = false); // write to stdout
 
 std::string load_bytes(const std::string &path);
+std::string load_bytes(); // read from stdin
 bool dump_bytes(const std::string &path, const std::string &bytes);
 
 RapidjsonValue geojson2json(const mapbox::geojson::value &geojson);

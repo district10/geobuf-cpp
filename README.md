@@ -36,12 +36,13 @@ compile & test:
 make build
 make test_all
 
-make roundtrip_test_cpp
 make roundtrip_test_js
+make roundtrip_test_cpp
 ```
 
 TODO:
 
 -   diff js/py/c++
+    -   fix precision test
 -   python binding
 -   wasm binding
