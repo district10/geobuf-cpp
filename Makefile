@@ -69,4 +69,5 @@ diff:
 	code --diff $(OUTPUT_JSN_JS) $(OUTPUT_JSN_CXX)
 
 test:
-	make roundtrip_test_js roundtrip_test_cpp diff
+	# make roundtrip_test_js roundtrip_test_cpp diff
+	python3 geobuf-roundtrip-test.py ../pygeobuf/test/fixtures

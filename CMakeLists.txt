@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.5)
 project(geobuf)
 
-set(CMAKE_BUILD_TYPE Debug)
+# set(CMAKE_BUILD_TYPE Debug)
 
 option(MAPBOX_GEOMETRY_ENABLE_CUSTOM_PROPERTIES "GeoJSON enable custom properties" ON)
 if (MAPBOX_GEOMETRY_ENABLE_CUSTOM_PROPERTIES)
