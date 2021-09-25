@@ -15,11 +15,11 @@
 #include <protozero/pbf_builder.hpp>
 #include <protozero/pbf_reader.hpp>
 
-#ifdef _DEBUG
+#ifdef NDEBUG
+#define dbg(x) x
+#else
 #define DBG_MACRO_NO_WARNING
 #include "dbg.h"
-#else
-#define dbg(x) x
 #endif
 
 constexpr const auto RJFLAGS =
@@ -35,26 +35,32 @@ namespace mapbox
 {
 namespace geobuf
 {
+// note that fp will be closed from inside after reading!
+static RapidjsonValue load_json(FILE *fp)
+{
+    char readBuffer[65536];
+    rapidjson::FileReadStream is(fp, readBuffer, sizeof(readBuffer));
+    RapidjsonDocument d;
+    d.ParseStream<RJFLAGS>(is);
+    fclose(fp);
+
+    // https://github.com/Tencent/rapidjson/issues/380
+    return RapidjsonValue{std::move(d.Move())};
+}
 RapidjsonValue load_json(const std::string &path)
 {
     FILE *fp = fopen(path.c_str(), "rb");
     if (!fp) {
         return {};
     }
-    char readBuffer[65536];
-    rapidjson::FileReadStream is(fp, readBuffer, sizeof(readBuffer));
-    RapidjsonDocument d;
-    d.ParseStream<RJFLAGS>(is);
-    fclose(fp);
-    return RapidjsonValue{d.GetObject()};
+    return load_json(fp);
 }
-bool dump_json(const std::string &path, const RapidjsonValue &json, bool indent)
+RapidjsonValue load_json() { return load_json(stdin); }
+
+// note that fp will be closed from inside after writing!
+bool dump_json(FILE *fp, const RapidjsonValue &json, bool indent)
 {
     using namespace rapidjson;
-    FILE *fp = fopen(path.c_str(), "wb");
-    if (!fp) {
-        return false;
-    }
     char writeBuffer[65536];
     FileWriteStream os(fp, writeBuffer, sizeof(writeBuffer));
     if (indent) {
@@ -66,6 +72,21 @@ bool dump_json(const std::string &path, const RapidjsonValue &json, bool indent)
     }
     fclose(fp);
     return true;
+}
+
+bool dump_json(const std::string &path, const RapidjsonValue &json, bool indent)
+{
+    FILE *fp = fopen(path.c_str(), "wb");
+    if (!fp) {
+        return false;
+    }
+    return dump_json(fp, json, indent);
+}
+
+// write to stdout
+bool dump_json(const RapidjsonValue &json, bool indent)
+{
+    return dump_json(stdout, json, indent);
 }
 
 std::string load_bytes(const std::string &path)
@@ -120,7 +141,7 @@ RapidjsonValue parse(const std::string &json, bool raise_error)
             return RapidjsonValue{};
         }
     }
-    return RapidjsonValue{d.GetObject()};
+    return RapidjsonValue{std::move(d.Move())};
 }
 
 std::string dump(const RapidjsonValue &json, bool indent)
@@ -143,6 +164,8 @@ std::string dump(const mapbox::geojson::value &geojson, bool indent)
 
 std::string Encoder::encode(const mapbox::geojson::geojson &geojson)
 {
+    dim = MAPBOX_GEOBUF_DEFAULT_DIM;
+    e = 1;
     keys.clear();
     analyze(geojson);
 
@@ -161,11 +184,12 @@ std::string Encoder::encode(const mapbox::geojson::geojson &geojson)
     for (auto &kv : keys_vec) {
         pbf.add_string(1, *kv.first);
     }
-    if (dim != 2) {
+    if (dim != MAPBOX_GEOBUF_DEFAULT_DIM) {
         pbf.add_uint32(2, dim);
     }
-    uint32_t precision = std::log10(std::min(e, maxPrecision));
-    if (precision != std::log10(maxPrecision)) {
+    const uint32_t precision = std::log10(std::min(e, maxPrecision));
+    if (precision !=
+        MAPBOX_GEOBUF_DEFAULT_PRECISION) { // assumed default precision in proto
         pbf.add_uint32(3, precision);
     }
 
@@ -180,7 +204,7 @@ std::string Encoder::encode(const mapbox::geojson::geojson &geojson)
         },
         [&](const mapbox::geojson::geometry &geometry) {
             protozero::pbf_writer pbf_g{pbf, 6};
-            writeFeature(geometry, pbf_g);
+            writeGeometry(geometry, pbf_g);
         });
     keys.clear();
     return data;
@@ -189,9 +213,10 @@ std::string Encoder::encode(const mapbox::geojson::geojson &geojson)
 void Encoder::analyze(const mapbox::geojson::geojson &geojson)
 {
     auto analyze_feature = [&](const mapbox::geojson::feature &f) {
-        for (auto &kv : f.properties) {
-            saveKey(kv.first);
-        }
+        saveKey(f.properties);
+#if MAPBOX_GEOMETRY_ENABLE_CUSTOM_PROPERTIES
+        saveKey(f.custom_properties);
+#endif
         analyzeGeometry(f.geometry);
     };
     geojson.match(
@@ -201,6 +226,9 @@ void Encoder::analyze(const mapbox::geojson::geojson &geojson)
             for (auto &f : fc) {
                 analyze_feature(f);
             }
+#if MAPBOX_GEOMETRY_ENABLE_CUSTOM_PROPERTIES
+            saveKey(fc.custom_properties);
+#endif
         });
 }
 
@@ -231,6 +259,9 @@ void Encoder::analyzeGeometry(const mapbox::geojson::geometry &geometry)
             }
         },
         [&](const mapbox::geojson::empty &null) {});
+#if MAPBOX_GEOMETRY_ENABLE_CUSTOM_PROPERTIES
+    saveKey(geometry.custom_properties);
+#endif
 }
 
 void Encoder::analyzeMultiLine(const LinesType &lines)
@@ -267,6 +298,13 @@ void Encoder::saveKey(const std::string &key)
     keys.emplace(key, keys.size());
 }
 
+void Encoder::saveKey(const mapbox::feature::property_map &props)
+{
+    for (auto &pair : props) {
+        saveKey(pair.first);
+    }
+}
+
 void Encoder::writeFeatureCollection(
     const mapbox::geojson::feature_collection &geojson, Pbf &pbf)
 {
@@ -274,7 +312,11 @@ void Encoder::writeFeatureCollection(
         protozero::pbf_writer pbf_f{pbf, 1};
         writeFeature(feature, pbf_f);
     }
-    // TODO: custom props
+#if MAPBOX_GEOMETRY_ENABLE_CUSTOM_PROPERTIES
+    if (!geojson.custom_properties.empty()) {
+        writeProps(geojson.custom_properties, pbf, 15);
+    }
+#endif
 }
 
 void Encoder::writeFeature(const mapbox::geojson::feature &feature, Pbf &pbf)
@@ -291,9 +333,13 @@ void Encoder::writeFeature(const mapbox::geojson::feature &feature, Pbf &pbf)
                          });
     }
     if (!feature.properties.empty()) {
-        writeProps(feature.properties, pbf);
-        // TODO: custom props
+        writeProps(feature.properties, pbf, 14);
     }
+#if MAPBOX_GEOMETRY_ENABLE_CUSTOM_PROPERTIES
+    if (!feature.custom_properties.empty()) {
+        writeProps(feature.custom_properties, pbf, 15);
+    }
+#endif
 }
 
 void Encoder::writeGeometry(const mapbox::geojson::geometry &geometry,
@@ -332,10 +378,15 @@ void Encoder::writeGeometry(const mapbox::geojson::geometry &geometry,
             }
         },
         [&](const mapbox::geojson::empty &empty) {});
+#if MAPBOX_GEOMETRY_ENABLE_CUSTOM_PROPERTIES
+    if (!geometry.custom_properties.empty()) {
+        writeProps(geometry.custom_properties, pbf, 15);
+    }
+#endif
 }
 
 void Encoder::writeProps(const mapbox::feature::property_map &props,
-                         Encoder::Pbf &pbf)
+                         Encoder::Pbf &pbf, int tag)
 {
     std::vector<uint32_t> indexes;
     int valueIndex = 0;
@@ -345,8 +396,7 @@ void Encoder::writeProps(const mapbox::feature::property_map &props,
         indexes.push_back(keys.at(pair.first));
         indexes.push_back(valueIndex++);
     }
-    pbf.add_packed_uint32(14, indexes.begin(), indexes.end());
-    // TODO: support custom properties
+    pbf.add_packed_uint32(tag, indexes.begin(), indexes.end());
 }
 
 void Encoder::writeValue(const mapbox::feature::value &value, Encoder::Pbf &pbf)
@@ -450,7 +500,9 @@ std::string Decoder::to_printable(const std::string &pbf_bytes)
 mapbox::geojson::geojson Decoder::decode(const std::string &pbf_bytes)
 {
     auto pbf = protozero::pbf_reader{pbf_bytes};
-    e = maxPrecision;
+    dim = MAPBOX_GEOBUF_DEFAULT_DIM;
+    e = std::pow(10, MAPBOX_GEOBUF_DEFAULT_PRECISION);
+    keys.clear();
     while (pbf.next()) {
         const auto tag = pbf.tag();
         if (tag == 1) {
@@ -469,26 +521,50 @@ mapbox::geojson::geojson Decoder::decode(const std::string &pbf_bytes)
             protozero::pbf_reader pbf_g = pbf.get_message();
             return readGeometry(pbf_g);
         } else {
-            // dbg("unhandled tag");
             pbf.skip();
         }
+    }
+}
+
+void unpack_properties(mapbox::geojson::prop_map &properties,
+                       const std::vector<uint32_t> &indexes,
+                       const std::vector<std::string> &keys,
+                       const std::vector<mapbox::geojson::value> &values)
+{
+    for (auto it = indexes.begin(); it != indexes.end();) {
+        auto &key = keys[*it++];
+        auto &value = values[*it++];
+        properties.emplace(key, value);
     }
 }
 
 mapbox::geojson::feature_collection Decoder::readFeatureCollection(Pbf &pbf)
 {
     mapbox::geojson::feature_collection fc;
+    std::vector<mapbox::geojson::value> values;
     while (pbf.next()) {
         const auto tag = pbf.tag();
         if (tag == 1) {
             protozero::pbf_reader pbf_f = pbf.get_message();
             fc.push_back(readFeature(pbf_f));
-        } else if (tag == 13 || tag == 15) {
+        } else if (tag == 13) {
+            protozero::pbf_reader pbf_v = pbf.get_message();
+            values.push_back(readValue(pbf_v));
+        } else if (tag == 15) {
+#if MAPBOX_GEOMETRY_ENABLE_CUSTOM_PROPERTIES
+            auto indexes = pbf.get_packed_uint32();
+            if (indexes.size() % 2 != 0) {
+                continue;
+            }
+            unpack_properties(
+                fc.custom_properties,                                  //
+                std::vector<uint32_t>(indexes.begin(), indexes.end()), //
+                keys, values);
+#else
             pbf.skip();
-            // dbg("TODO custom properties");
+#endif
         } else {
             pbf.skip();
-            // dbg("unhandled pbf type");
         }
     }
     return fc;
@@ -512,14 +588,25 @@ mapbox::geojson::feature Decoder::readFeature(Pbf &pbf)
         } else if (tag == 14) {
             auto indexes = pbf.get_packed_uint32();
             if (indexes.size() % 2 != 0) {
-                // dbg("something went wrong");
                 continue;
             }
-            for (auto it = indexes.begin(); it != indexes.end();) {
-                auto &key = keys[*it++];
-                auto &value = values[*it++];
-                f.properties.emplace(key, value);
+            unpack_properties(
+                f.properties,                                          //
+                std::vector<uint32_t>(indexes.begin(), indexes.end()), //
+                keys, values);
+        } else if (tag == 15) {
+#if MAPBOX_GEOMETRY_ENABLE_CUSTOM_PROPERTIES
+            auto indexes = pbf.get_packed_uint32();
+            if (indexes.size() % 2 != 0) {
+                continue;
             }
+            unpack_properties(
+                f.custom_properties,                                   //
+                std::vector<uint32_t>(indexes.begin(), indexes.end()), //
+                keys, values);
+#else
+            pbf.skip();
+#endif
         } else {
             pbf.skip();
         }
@@ -653,6 +740,7 @@ mapbox::geojson::geometry Decoder::readGeometry(Pbf &pbf)
         }
     };
 
+    std::vector<mapbox::geojson::value> values;
     std::vector<uint32_t> lengths;
     mapbox::geojson::geometry g;
     while (pbf.next()) {
@@ -686,8 +774,24 @@ mapbox::geojson::geometry Decoder::readGeometry(Pbf &pbf)
             }
             g.get<mapbox::geojson::geometry_collection>().push_back(
                 readGeometry(pbf));
-        } else if (tag == 13 || tag == 15) {
-            // dbg("TODO custom properties");
+        } else if (tag == 13) {
+            protozero::pbf_reader pbf_v = pbf.get_message();
+            values.push_back(readValue(pbf_v));
+        } else if (tag == 15) {
+#if MAPBOX_GEOMETRY_ENABLE_CUSTOM_PROPERTIES
+            auto indexes = pbf.get_packed_uint32();
+            if (indexes.size() % 2 != 0) {
+                continue;
+            }
+            unpack_properties(
+                g.custom_properties,                                   //
+                std::vector<uint32_t>(indexes.begin(), indexes.end()), //
+                keys, values);
+#else
+            pbf.skip();
+#endif
+        } else {
+            pbf.skip();
         }
     }
     return g;

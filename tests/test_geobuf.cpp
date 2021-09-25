@@ -78,3 +78,55 @@ TEST_CASE("decoding test")
     // js:  119.882812,
     // cxx: 119.882813,
 }
+
+TEST_CASE("custom properties test")
+{
+#if MAPBOX_GEOMETRY_ENABLE_CUSTOM_PROPERTIES
+    {
+        mapbox::geojson::feature_collection fc;
+        fc.custom_properties["answer"] = 42;
+        dbg(mapbox::geobuf::dump(fc.custom_properties));
+        auto geojson = mapbox::geojson::geojson{fc};
+        dbg(mapbox::geobuf::dump(
+            geojson.get<mapbox::geojson::feature_collection>()
+                .custom_properties));
+        CHECK(geojson.get<mapbox::geojson::feature_collection>()
+                  .custom_properties.size() == 1);
+
+        mapbox::geojson::geojson geojson2 = fc;
+        dbg(fc.custom_properties.size());
+        dbg(mapbox::geobuf::dump(
+            geojson2.get<mapbox::geojson::feature_collection>()
+                .custom_properties));
+        geojson2.get<mapbox::geojson::feature_collection>().custom_properties =
+            fc.custom_properties;
+        dbg(mapbox::geobuf::dump(
+            geojson2.get<mapbox::geojson::feature_collection>()
+                .custom_properties));
+        CHECK(geojson2.get<mapbox::geojson::feature_collection>()
+                  .custom_properties.size() == 1);
+
+        mapbox::geojson::feature_collection geojson3 = fc;
+        dbg(mapbox::geobuf::dump(geojson3.custom_properties));
+        dbg(mapbox::geobuf::dump(fc.custom_properties));
+        CHECK(geojson3.custom_properties.size() == 1);
+    }
+
+    mapbox::geojson::feature feature;
+    dbg(feature.custom_properties.size());
+    auto path = std::string(PROJECT_SOURCE_DIR "/data/sample1.json");
+    auto json = mapbox::geobuf::load_json(path);
+    auto geojson = mapbox::geojson::convert(json);
+    auto &fc = geojson.get<mapbox::geojson::feature_collection>();
+    dbg(fc.size());
+    dbg(fc.custom_properties.size());
+    dbg(mapbox::geobuf::dump(fc.custom_properties));
+    auto &f = fc[0];
+    dbg(f.custom_properties.size());
+    dbg(mapbox::geobuf::dump(f.custom_properties));
+    CHECK(fc.custom_properties.size() == 2);
+    CHECK(f.custom_properties.size() == 3);
+#else
+    dbg("MAPBOX_GEOMETRY_ENABLE_CUSTOM_PROPERTIES is OFF")
+#endif
+}

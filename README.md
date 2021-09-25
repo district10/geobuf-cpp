@@ -17,8 +17,7 @@ compile & test:
 ```
 make build
 make test_all
+
+make roundtrip_test_cpp
+make roundtrip_test_js
 ```
-
-## TODOs
-
--   custom properties

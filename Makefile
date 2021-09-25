@@ -2,7 +2,6 @@ PROJECT_SOURCE_DIR ?= $(abspath ./)
 BUILD_DIR ?= $(PROJECT_SOURCE_DIR)/build
 INSTALL_DIR ?= $(BUILD_DIR)/install
 NUM_JOB ?= 8
-JQ ?= jq
 
 all:
 	@echo nothing special
@@ -50,19 +49,23 @@ OUTPUT_DIR_CXX ?= $(BUILD_DIR)/cxx
 OUTPUT_PBF_CXX = $(OUTPUT_DIR_CXX)/$(GEOJSON_BASENAME).pbf
 OUTPUT_JSN_CXX = $(OUTPUT_PBF_CXX).json
 
+build/bin/json2geobuf: build
+
+# LINTJSON := jq .
+LINTJSON := $(BUILD_DIR)/bin/lintjson
 roundtrip_test_js:
 	@umask 0000 && mkdir -p $(OUTPUT_DIR_JS)
 	json2geobuf $(INPUT_GEOJSON_PATH) > $(OUTPUT_PBF_JS)
 	build/bin/pbf_decoder $(OUTPUT_PBF_JS) > $(OUTPUT_DIR_JS)/pbf.txt
-	geobuf2json $(OUTPUT_PBF_JS) | $(JQ) . > $(OUTPUT_JSN_JS)
-	cat $(INPUT_GEOJSON_PATH) | $(JQ) . > $(OUTPUT_DIR_JS)/$(GEOJSON_BASENAME)
-roundtrip_test_cpp:
+	geobuf2json $(OUTPUT_PBF_JS) | $(LINTJSON) > $(OUTPUT_JSN_JS)
+	cat $(INPUT_GEOJSON_PATH) | $(LINTJSON) > $(OUTPUT_DIR_JS)/$(GEOJSON_BASENAME)
+roundtrip_test_cpp: build/bin/json2geobuf
 	@umask 0000 && mkdir -p $(OUTPUT_DIR_CXX)
 	$(BUILD_DIR)/bin/json2geobuf $(INPUT_GEOJSON_PATH) > $(OUTPUT_PBF_CXX)
 	build/bin/pbf_decoder $(OUTPUT_PBF_CXX) > $(OUTPUT_DIR_CXX)/pbf.txt
-	$(BUILD_DIR)/bin/geobuf2json $(OUTPUT_PBF_CXX) | $(JQ) . > $(OUTPUT_JSN_CXX)
+	$(BUILD_DIR)/bin/geobuf2json $(OUTPUT_PBF_JS) | $(LINTJSON) > $(OUTPUT_JSN_CXX)
 diff:
-	code --diff $(OUTPUT_DIR_JS)/pbf.txt $(OUTPUT_DIR_CXX)/pbf.txt
+	# code --diff $(OUTPUT_DIR_JS)/pbf.txt $(OUTPUT_DIR_CXX)/pbf.txt
 	code --diff $(OUTPUT_JSN_JS) $(OUTPUT_JSN_CXX)
 
 test:
