@@ -11,6 +11,7 @@
 #include "rapidjson/stringbuffer.h"
 #include <fstream>
 
+#include <cmath>
 #include <protozero/pbf_builder.hpp>
 #include <protozero/pbf_reader.hpp>
 
@@ -45,7 +46,7 @@ RapidjsonValue load_json(const std::string &path)
     RapidjsonDocument d;
     d.ParseStream<RJFLAGS>(is);
     fclose(fp);
-    return d.GetObject();
+    return RapidjsonValue{d.GetObject()};
 }
 bool dump_json(const std::string &path, const RapidjsonValue &json, bool indent)
 {
@@ -119,7 +120,7 @@ RapidjsonValue parse(const std::string &json, bool raise_error)
             return RapidjsonValue{};
         }
     }
-    return d.GetObject();
+    return RapidjsonValue{d.GetObject()};
 }
 
 std::string dump(const RapidjsonValue &json, bool indent)

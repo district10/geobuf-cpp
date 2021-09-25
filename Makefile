@@ -32,6 +32,12 @@ build:
 test_all:
 	@cd build && for t in $(wildcard $(BUILD_DIR)/bin/test_*); do echo $$t && eval $$t >/dev/null 2>&1 && echo 'ok' || echo $(RED)Not Ok$(NC); done
 
+build_all:
+	python3 -m mdk_tools.cli.run_in_build_env --docker-tag u16 make build
+	python3 -m mdk_tools.cli.run_in_build_env --docker-tag u18 make build
+	python3 -m mdk_tools.cli.run_in_build_env --docker-tag u20 make build
+	python3 -m mdk_tools.cli.run_in_build_env --docker-tag win make build
+	python3 -m mdk_tools.cli.run_in_build_env --docker-tag mph make build
 
 INPUT_GEOJSON_PATH ?= data/sample1.json
 GEOJSON_BASENAME = $(shell basename $(abspath $(INPUT_GEOJSON_PATH)))
