@@ -1,6 +1,7 @@
 #include "geobuf/geobuf.hpp"
 #include "geobuf/pbf_decoder.cpp"
 
+#include <array>
 #include <mapbox/geojson_impl.hpp>
 #include <mapbox/geojson_value_impl.hpp>
 
@@ -10,6 +11,7 @@
 #include "rapidjson/prettywriter.h"
 #include "rapidjson/stringbuffer.h"
 #include <fstream>
+#include <iostream>
 
 #include <cmath>
 #include <protozero/pbf_builder.hpp>
@@ -22,9 +24,10 @@
 #include "dbg.h"
 #endif
 
-constexpr const auto RJFLAGS =
-    rapidjson::kParseDefaultFlags | rapidjson::kParseCommentsFlag |
-    rapidjson::kParseFullPrecisionFlag | rapidjson::kParseTrailingCommasFlag;
+constexpr const auto RJFLAGS = rapidjson::kParseDefaultFlags |      //
+                               rapidjson::kParseCommentsFlag |      //
+                               rapidjson::kParseFullPrecisionFlag | //
+                               rapidjson::kParseTrailingCommasFlag;
 constexpr uint32_t dimXY = 2;
 constexpr uint32_t dimXYZ = 3;
 
@@ -164,6 +167,12 @@ std::string dump(const RapidjsonValue &json, bool indent)
 std::string dump(const mapbox::geojson::value &geojson, bool indent)
 {
     return dump(to_json(geojson), indent);
+}
+
+std::string dump(const mapbox::geojson::geojson &geojson, bool indent)
+{
+    RapidjsonAllocator allocator;
+    return dump(mapbox::geojson::convert(geojson, allocator), indent);
 }
 
 std::string Encoder::encode(const mapbox::geojson::geojson &geojson)
@@ -528,6 +537,7 @@ mapbox::geojson::geojson Decoder::decode(const std::string &pbf_bytes)
             pbf.skip();
         }
     }
+    return mapbox::geojson::geojson{};
 }
 
 void unpack_properties(mapbox::geojson::prop_map &properties,

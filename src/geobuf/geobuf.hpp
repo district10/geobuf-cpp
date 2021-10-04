@@ -35,6 +35,7 @@ mapbox::geojson::value json2geojson(const RapidjsonValue &json);
 RapidjsonValue parse(const std::string &json, bool raise_error = false);
 std::string dump(const RapidjsonValue &json, bool indent = false);
 std::string dump(const mapbox::geojson::value &geojson, bool indent = false);
+std::string dump(const mapbox::geojson::geojson &geojson, bool indent = false);
 
 struct Encoder
 {
@@ -86,7 +87,6 @@ struct Decoder
 {
     using Pbf = protozero::pbf_reader;
     Decoder() {}
-
     static std::string to_printable(const std::string &pbf_bytes);
     mapbox::geojson::geojson decode(const std::string &pbf_bytes);
 

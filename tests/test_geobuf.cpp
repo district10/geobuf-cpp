@@ -10,12 +10,12 @@
 
 std::string FIXTURES_DIR = PROJECT_SOURCE_DIR "/geobuf/test/fixtures";
 std::vector<std::string> FIXTURES = {
-    "issue55.json", //
-    // "issue62.json",          //
-    // "issue90.json",          //
-    // "precision.json",        //
-    // "props.json",            //
-    // "single-multipoly.json", //
+    "issue55.json",          //
+    "issue62.json",          //
+    "issue90.json",          //
+    "precision.json",        //
+    "props.json",            //
+    "single-multipoly.json", //
 };
 
 void roundtripTest(const std::string &fixture_basename)
@@ -37,6 +37,9 @@ void roundtripTest(const std::string &fixture_basename)
     dbg(mapbox::geobuf::Decoder::to_printable(pbf));
     dbg("done");
 
+    auto decoder = mapbox::geobuf::Decoder();
+    auto geojson_back = decoder.decode(pbf);
+    dbg(mapbox::geobuf::dump(geojson_back, false));
     // build/bin/pbf_decoder build/issue55.json.pbf
 }
 
@@ -129,4 +132,11 @@ TEST_CASE("custom properties test")
 #else
     dbg("MAPBOX_GEOMETRY_ENABLE_CUSTOM_PROPERTIES is OFF")
 #endif
+}
+
+TEST_CASE("roundtrip")
+{
+    for (auto &basename : FIXTURES) {
+        roundtripTest(basename);
+    }
 }
