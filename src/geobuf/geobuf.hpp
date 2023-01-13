@@ -37,6 +37,24 @@ std::string dump(const RapidjsonValue &json, bool indent = false);
 std::string dump(const mapbox::geojson::value &geojson, bool indent = false);
 std::string dump(const mapbox::geojson::geojson &geojson, bool indent = false);
 
+inline void normalize_json_inplace(mapbox::geojson::rapidjson_value &json)
+{
+    if (json.IsArray()) {
+        for (auto &e : json.GetArray()) {
+            normalize_json_inplace(e);
+        }
+    } else if (json.IsObject()) {
+        auto obj = json.GetObject();
+        // https://rapidjson.docsforge.com/master/sortkeys.cpp/
+        std::sort(obj.MemberBegin(), obj.MemberEnd(), [](auto &lhs, auto &rhs) {
+            return strcmp(lhs.name.GetString(), rhs.name.GetString()) < 0;
+        });
+        for (auto &kv : obj) {
+            normalize_json_inplace(kv.value);
+        }
+    }
+}
+
 struct Encoder
 {
     using Pbf = protozero::pbf_writer;
@@ -46,6 +64,8 @@ struct Encoder
     {
     }
     std::string encode(const mapbox::geojson::geojson &geojson);
+    std::string encode(const std::string &geojson);
+    bool encode(const std::string &input_path, const std::string &output_path);
 
   private:
     void analyze(const mapbox::geojson::geojson &geojson);
@@ -101,5 +121,5 @@ struct Decoder
     std::vector<std::string> keys;
 };
 
-} // namespace goebuf
+} // namespace geobuf
 } // namespace mapbox
