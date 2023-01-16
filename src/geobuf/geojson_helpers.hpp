@@ -8,6 +8,7 @@
 #endif
 
 #include <Eigen/Core>
+#include <iostream>
 #include <mapbox/geojson.hpp>
 
 static_assert(sizeof(mapbox::geojson::point) == sizeof(Eigen::Vector3d),
@@ -165,7 +166,7 @@ inline std::string geometry_type(const mapbox::geojson::geometry &self)
         [](const mapbox::geojson::geometry_collection &g) {
             return "GeometryCollection";
         },
-        [](const auto &g) -> std::string { return "Invalid"; });
+        [](const auto &g) -> std::string { return "None"; });
 }
 
 inline void eigen2geom(const Eigen::MatrixXd &mat,
@@ -175,7 +176,7 @@ inline void eigen2geom(const Eigen::MatrixXd &mat,
         points.clear();
         return;
     }
-    if (mat.cols() != 2 || mat.cols() != 3) {
+    if (mat.cols() != 2 && mat.cols() != 3) {
         return;
     }
     points.resize(mat.rows());
@@ -193,7 +194,7 @@ inline void eigen2geom(Eigen::Ref<const MatrixXdRowMajor> mat,
         points.clear();
         return;
     }
-    if (mat.cols() != 2 || mat.cols() != 3) {
+    if (mat.cols() != 2 && mat.cols() != 3) {
         return;
     }
     points.resize(mat.rows());
@@ -258,7 +259,42 @@ inline std::string get_type(const mapbox::geojson::value &self)
         [](const auto &) -> std::string { return "null"; });
 }
 
-void clear_geojson_value(mapbox::geojson::value &self)
+inline void geometry_push_back(mapbox::geojson::geometry &self,
+                               const mapbox::geojson::point &point)
+{
+    self.match([&](mapbox::geojson::multi_point &g) { g.push_back(point); },
+               [&](mapbox::geojson::line_string &g) { g.push_back(point); },
+               [&](auto &) {
+                   // TODO, log
+               });
+}
+
+inline void geometry_push_back(mapbox::geojson::geometry &self,
+                               const Eigen::VectorXd &point)
+{
+    auto geom = mapbox::geojson::point(point[0], point[1],
+                                       point.size() > 2 ? point[2] : 0.0);
+    geometry_push_back(self, geom);
+}
+
+inline void geometry_push_back(mapbox::geojson::geometry &self,
+                               const mapbox::geojson::geometry &geom)
+{
+    self.match(
+        [&](mapbox::geojson::geometry_collection &g) { g.push_back(geom); },
+        [&](auto &) {});
+}
+
+inline void geometry_pop_back(mapbox::geojson::geometry &self)
+{
+    // TODO
+}
+inline void geometry_clear(mapbox::geojson::geometry &self)
+{
+    // TODO
+}
+
+inline void clear_geojson_value(mapbox::geojson::value &self)
 {
     self.match([](mapbox::geojson::value::array_type &arr) { arr.clear(); },
                [](mapbox::geojson::value::object_type &obj) { obj.clear(); },
