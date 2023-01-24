@@ -78,7 +78,8 @@ test:
 	# make roundtrip_test_js roundtrip_test_cpp diff
 	python3 geobuf-roundtrip-test.py pygeobuf/test/fixtures
 pytest:
-	pytest tests
+	python3 -m pip install pytest numpy
+	pytest tests # --capture=tee-sys
 .PHONY: test pytest
 
 clean_test:

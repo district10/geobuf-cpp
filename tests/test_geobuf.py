@@ -6,6 +6,7 @@ from copy import deepcopy
 
 import numpy as np
 import pybind11_geobuf
+import pytest
 from pybind11_geobuf import (  # noqa
     Decoder,
     Encoder,
@@ -169,6 +170,24 @@ def test_geojson_point():
     g3.from_numpy([3, 7, 2])
     assert np.all(g3.as_numpy() == [3, 7, 2])
 
+    assert g3() == [3, 7, 2]
+
+    # from/to_rapidjson
+    j = g3.to_rapidjson()()
+    assert j == {"type": "Point", "coordinates": [3.0, 7.0, 2.0]}
+    # update
+    g3[0] = 0.0
+    assert g3.to_rapidjson()() != {
+        "type": "Point",
+        "coordinates": [3.0, 7.0, 2.0],
+    }
+    # reset
+    g3.from_rapidjson(rapidjson(j))
+    assert g3.to_rapidjson()() == {
+        "type": "Point",
+        "coordinates": [3.0, 7.0, 2.0],
+    }
+
 
 def test_geojson_multi_point():
     g1 = geojson.MultiPoint()
@@ -197,6 +216,16 @@ def test_geojson_multi_point():
     g1.append(geojson.Point())
     assert len(g1) == 2  # append not working, for now
 
+    j = g1.to_rapidjson()
+    gg = geojson.MultiPoint().from_rapidjson(j)
+    assert g1 == gg
+    assert gg() == [[1, 2, 0], [7, 8, 9]]
+    assert j() == gg.to_rapidjson()()
+    # rapidjson is comparable
+    assert j == gg.to_rapidjson()
+    j["another_key"] = "value"
+    assert j != gg.to_rapidjson()
+
 
 def test_geojson_line_string():
     g1 = geojson.LineString()
@@ -207,24 +236,72 @@ def test_geojson_line_string():
     assert np.all(g1.as_numpy() == [[1, 2, 3], [4, 5, 6]])
     assert g1() == [[1, 2, 3], [4, 5, 6]]
 
+    j = g1.to_rapidjson()
+    j["coordinates"] = [[1, 1, 1], [2, 2, 2]]
+    g1.from_rapidjson(j)
+    assert g1() == [[1, 1, 1], [2, 2, 2]]
+    G = geojson.Geometry(g1)
+    assert G.to_rapidjson() == g1.to_rapidjson()
+    assert G.type() == "LineString"
+
 
 def test_geojson_multi_line_string():
     g1 = geojson.MultiLineString()
     assert isinstance(g1, geojson.MultiLineString)
-    # TODO, fix
-    # assert len(g1) == 0
+    assert isinstance(g1, geojson.LineStringList)
+    assert len(g1) == 0
+
+    xyzs = [[1, 2, 3], [4, 5, 6]]
+    g1.from_numpy(xyzs)
+    assert len(g1) == 1
+    assert np.all(g1.to_numpy() == xyzs)
+
+    j = g1.to_rapidjson()
+    g1.as_numpy()[:] = 1
+    assert g1.as_numpy().sum() == 6
+    g1.from_rapidjson(j)
+    assert np.all(g1.to_numpy() == xyzs)
+
+    coords = np.array(j["coordinates"]())
+    assert coords.ndim == 3
+    assert coords.shape == (1, 2, 3)
 
 
 def test_geojson_polygon():
     g1 = geojson.Polygon()
     assert isinstance(g1, geojson.Polygon)
-    # assert len(g1) == 0
+    assert isinstance(g1, geojson.LinearRingList)
+    assert len(g1) == 0
+    assert g1.to_rapidjson()() == {"type": "Polygon", "coordinates": []}
+
+    g1.from_numpy([[1, 0], [1, 1], [0, 1], [1, 0]])
+    assert np.all(
+        g1.to_numpy()
+        == [
+            [1, 0, 0],
+            [1, 1, 0],
+            [0, 1, 0],
+            [1, 0, 0],
+        ]
+    )
 
 
 def test_geojson_multi_polygon():
     g1 = geojson.MultiPolygon()
     assert isinstance(g1, geojson.MultiPolygon)
-    # assert len(g1) == 0
+    assert len(g1) == 0
+    assert g1.to_rapidjson()() == {"type": "MultiPolygon", "coordinates": []}
+    g1.from_numpy([[1, 0], [1, 1], [0, 1], [1, 0]])
+
+    assert g1.to_rapidjson()() == {
+        "type": "MultiPolygon",
+        "coordinates": [[[[1.0, 0.0], [1.0, 1.0], [0.0, 1.0], [1.0, 0.0]]]],
+    }
+    coords = np.array(g1.to_rapidjson()["coordinates"]())
+    assert coords.shape == (1, 1, 4, 2)
+
+    g2 = geojson.MultiPolygon().from_rapidjson(g1.to_rapidjson())
+    assert g1 == g2
 
 
 def test_geojson_geometry():
@@ -246,3 +323,68 @@ def test_geojson_geometry():
     gc.push_back(g3)
     gc.push_back(g4)
     assert gc() == {"type": gc.type(), "geometries": [g3(), g4()]}
+
+    # update value
+    g31 = g3.clone()
+    g32 = g3.clone()
+    assert g32 == g31
+    g31.as_multi_point()[0][0] = 5
+    assert g31.as_multi_point()[0][0] == 5
+    assert g32 != g31
+
+    gc2 = gc.clone()
+    assert gc2() == gc()
+    assert id(gc2) != id(gc)
+
+    pickled = pickle.dumps(gc2)
+    gc3 = pickle.loads(pickled)
+    assert gc3() == gc()
+    assert id(gc3) != id(gc)
+
+    gc4 = deepcopy(gc3)
+    assert gc4() == gc()
+    assert id(gc4) != id(gc)
+
+    assert gc4.__geo_interface__ == gc()
+
+
+def test_geobuf_from_geojson():
+    encoder = Encoder(max_precision=int(10**8))
+    feature = sample_geojson()
+    encoded_0 = encoder.encode(json.dumps(feature))
+    encoded = encoder.encode(feature)
+    assert encoded == encoded_0
+    decoded = Decoder().decode(encoded)
+
+    decoded_again = Decoder().decode(
+        Encoder(max_precision=int(10**8)).encode(decoded)
+    )
+    assert decoded_again == decoded
+    assert decoded_again == Decoder().decode(encoded)
+
+    j = Decoder().decode_to_rapidjson(encoded)
+    g = Decoder().decode_to_geojson(encoded)
+    assert g.is_feature()
+    f = g.as_feature()
+    assert isinstance(f, geojson.Feature)
+    with pytest.raises(RuntimeError) as excinfo:
+        g.as_geometry()
+    assert "in get<T>()" in str(excinfo)
+    assert str2json2str(json.dumps(f()), sort_keys=True) == str2json2str(
+        decoded, sort_keys=True
+    )
+    assert str2geojson2str(json.dumps(f()), sort_keys=True) == str2geojson2str(
+        decoded, sort_keys=True
+    )
+
+    print(j(), j.dumps())
+
+    expected = str2json2str(json.dumps(feature), indent=True, sort_keys=True)
+    actually = str2json2str(decoded, indent=True, sort_keys=True)
+    assert len(expected) > 0
+    assert len(actually) > 0
+    # assert expected == actually # TODO
+
+    encoded1 = encoder.encode(rapidjson(feature))
+    assert len(encoded1) == len(encoded)
+    # geojson.Feature().from_rapidjson

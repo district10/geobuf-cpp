@@ -257,11 +257,20 @@ std::string Encoder::encode(const mapbox::geojson::geojson &geojson)
 
 std::string Encoder::encode(const std::string &geojson_text)
 {
+    if (geojson_text.empty()) {
+        return "";
+    }
     if (geojson_text[0] != '{') {
         auto json = mapbox::geobuf::load_json(geojson_text);
         return encode(mapbox::geojson::convert(json));
     }
     auto geojson = mapbox::geojson::convert(parse(geojson_text));
+    return encode(geojson);
+}
+
+std::string Encoder::encode(const RapidjsonValue &json)
+{
+    auto geojson = mapbox::geojson::convert(json);
     return encode(geojson);
 }
 
