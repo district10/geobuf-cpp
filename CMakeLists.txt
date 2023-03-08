@@ -8,6 +8,10 @@ include(${CUBAO_INCLUDE}/utils.cmake)
 activate_common_configuration()
 auto_build_type_and_compile_flags()
 configure_output_directories()
+
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    set(CUBAO_USE_DUMMY_VERSION_H "True")
+endif()
 configure_version_h()
 
 # MISC
@@ -83,9 +87,9 @@ add_custom_target(test_all COMMAND make -C .. test_all)
 set(PYBIND11_CPP_STANDARD -std=c++17)
 add_subdirectory(pybind11)
 pybind11_add_module(
-    pybind11_geobuf
+    _pybind11_geobuf
     src/main.cpp
     src/pybind11_rapidjson.cpp
     src/pybind11_geojson.cpp)
-target_link_libraries(pybind11_geobuf PRIVATE ${PROJECT_NAME})
-target_compile_definitions(pybind11_geobuf PRIVATE VERSION_INFO=${PYBIND11_GEOBUF_VERSION_INFO})
+target_link_libraries(_pybind11_geobuf PRIVATE ${PROJECT_NAME})
+target_compile_definitions(_pybind11_geobuf PRIVATE VERSION_INFO=${PYBIND11_GEOBUF_VERSION_INFO})

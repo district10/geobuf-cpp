@@ -1,4 +1,5 @@
 PROJECT_SOURCE_DIR ?= $(abspath ./)
+PROJECT_NAME ?= $(shell basename $(PROJECT_SOURCE_DIR))
 BUILD_DIR ?= $(PROJECT_SOURCE_DIR)/build
 INSTALL_DIR ?= $(BUILD_DIR)/install
 NUM_JOB ?= 8
@@ -102,8 +103,16 @@ python_build:
 python_sdist:
 	$(PYTHON) setup.py sdist
 	# tar -tvf dist/geobuf-*.tar.gz
-python_test:
-	# TODO
+python_test: pytest
+
+cli_test:
+	python3 -m pybind11_geobuf
+	python3 -m pybind11_geobuf --help
+	python3 -m pybind11_geobuf json2geobuf data/sample1.json build/sample1.pbf
+	python3 -m pybind11_geobuf geobuf2json build/sample1.pbf build/sample1.json --indent=True --sort_keys=True
+	python3 -m pybind11_geobuf pbf_decode build/sample1.pbf build/sample1.pbf.txt
+	python3 -m pybind11_geobuf normalize_json data/sample1.json build/sample1.normalized.json
+	python3 -m pybind11_geobuf normalize_json data/sample1.json build/sample1.normalized.precision2.json --precision=2
 
 # conda create -y -n py36 python=3.6
 # conda create -y -n py37 python=3.7
@@ -139,8 +148,8 @@ upload_wheels:
 	twine upload dist/*.whl -r $(pypi_remote)
 
 tar.gz:
-	tar -cvz --exclude .git -f ../geobuf.tar.gz .
-	ls -alh ../geobuf.tar.gz
+	tar -cvz --exclude .git -f ../$(PROJECT_NAME).tar.gz .
+	ls -alh ../$(PROJECT_NAME).tar.gz
 
 # https://stackoverflow.com/a/25817631
 echo-%  : ; @echo -n $($*)

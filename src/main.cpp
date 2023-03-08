@@ -26,7 +26,7 @@ void bind_geojson(py::module &m);
 void bind_rapidjson(py::module &m);
 } // namespace cubao
 
-PYBIND11_MODULE(pybind11_geobuf, m)
+PYBIND11_MODULE(_pybind11_geobuf, m)
 {
     using namespace mapbox::geobuf;
 
@@ -147,6 +147,7 @@ PYBIND11_MODULE(pybind11_geobuf, m)
     py::class_<Decoder>(m, "Decoder", py::module_local()) //
         .def(py::init<>())
         //
+        .def("precision", &Decoder::precision)
         .def(
             "decode",
             [](Decoder &self, const std::string &geobuf, bool indent,
